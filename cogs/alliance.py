@@ -247,6 +247,13 @@ class Alliance(commands.Cog):
                 custom_id="theme_settings",
                 row=3
             ))
+            view.add_item(discord.ui.Button(
+                label="TNT",
+                emoji="🧨",
+                style=discord.ButtonStyle.danger,
+                custom_id="tnt_dedication",
+                row=4
+            ))
 
             if admin_count == 0:
                 await interaction.edit_original_response(embed=embed, view=view)
@@ -347,6 +354,13 @@ class Alliance(commands.Cog):
                 custom_id="theme_settings",
                 row=3
             ))
+            view.add_item(discord.ui.Button(
+                label="TNT",
+                emoji="🧨",
+                style=discord.ButtonStyle.danger,
+                custom_id="tnt_dedication",
+                row=4
+            ))
 
             try:
                 await interaction.response.edit_message(embed=embed, view=view)
@@ -369,6 +383,29 @@ class Alliance(commands.Cog):
                 return
 
             try:
+                if custom_id == "tnt_dedication":
+                    embed = discord.Embed(
+                        title="🧨 TNT",
+                        description=(
+                            "**Message to my friends**\n\n"
+                            "I wanted to dedicate this bot to your alliance, and I hope it will be a gift that you truly enjoy.\n\n"
+                            "**Your friend, ღღ The Danger**"
+                        ),
+                        color=discord.Color.red()
+                    )
+                    embed.set_footer(text="TNT Bot")
+
+                    view = discord.ui.View()
+                    view.add_item(discord.ui.Button(
+                        label="Main Menu",
+                        emoji=theme.homeIcon,
+                        style=discord.ButtonStyle.secondary,
+                        custom_id="main_menu"
+                    ))
+
+                    await interaction.response.edit_message(embed=embed, view=view)
+                    return
+
                 if custom_id == "alliance_operations":
                     embed = discord.Embed(
                         title=f"{theme.allianceIcon} Alliance Operations",
