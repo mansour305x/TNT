@@ -1051,13 +1051,23 @@ if __name__ == "__main__":
     init(autoreset=True)
 
     token_file = "bot_token.txt"
-    if not os.path.exists(token_file):
-        bot_token = input("Enter the bot token: ")
+    bot_token = os.getenv("DISCORD_BOT_TOKEN", "").strip()
+
+    if bot_token:
+        if not os.path.exists(token_file):
+            with open(token_file, "w") as f:
+                f.write(bot_token)
+    elif os.path.exists(token_file):
+        with open(token_file, "r") as f:
+            bot_token = f.read().strip()
+    elif sys.stdin is not None and sys.stdin.isatty():
+        bot_token = input("Enter the bot token: ").strip()
         with open(token_file, "w") as f:
             f.write(bot_token)
     else:
-        with open(token_file, "r") as f:
-            bot_token = f.read().strip()
+        print("ERROR: No bot token found.")
+        print("Set DISCORD_BOT_TOKEN in your hosting panel or create bot_token.txt in the bot directory.")
+        sys.exit(1)
 
     if not os.path.exists("db"):
         os.makedirs("db")
