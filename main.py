@@ -1022,6 +1022,9 @@ if __name__ == "__main__":
         asyncio.run(check_and_update_files())
     elif "--no-update" in sys.argv:
         print(F.YELLOW + "Update check skipped due to --no-update flag." + R)
+    elif is_container() and "--autoupdate" not in sys.argv:
+        print(F.YELLOW + "Running in a container. Automatic self-update is disabled by default for stability." + R)
+        print(F.YELLOW + "Use --autoupdate only if you explicitly want the bot to update itself on startup." + R)
     else:
         asyncio.run(check_and_update_files())
             
@@ -1186,6 +1189,8 @@ if __name__ == "__main__":
 
     async def main():
         await load_cogs()
+        reconnect_delay = 30
+        max_reconnect_delay = 300
 
         while True:
             try:
@@ -1216,17 +1221,17 @@ if __name__ == "__main__":
                     await asyncio.sleep(60)
                 elif e.status >= 500:
                     print(f"\n{F.YELLOW}Discord server error (HTTP {e.status}).{R}")
-                    print(f"{F.YELLOW}Discord may be experiencing issues. Retrying in 30 seconds...{R}")
-                    await asyncio.sleep(30)
+                    print(f"{F.YELLOW}Discord may be experiencing issues. Retrying in {reconnect_delay} seconds...{R}")
+                    await asyncio.sleep(reconnect_delay)
                 else:
                     print(f"\n{F.RED}Discord HTTP error (HTTP {e.status}): {e.text}{R}")
-                    print(f"{F.YELLOW}Retrying in 30 seconds...{R}")
-                    await asyncio.sleep(30)
+                    print(f"{F.YELLOW}Retrying in {reconnect_delay} seconds...{R}")
+                    await asyncio.sleep(reconnect_delay)
 
             except discord.GatewayNotFound:
                 print(f"\n{F.YELLOW}Discord gateway unavailable.{R}")
-                print(f"{F.YELLOW}Discord may be experiencing issues. Retrying in 30 seconds...{R}")
-                await asyncio.sleep(30)
+                print(f"{F.YELLOW}Discord may be experiencing issues. Retrying in {reconnect_delay} seconds...{R}")
+                await asyncio.sleep(reconnect_delay)
 
             except (aiohttp.ClientConnectorDNSError, aiohttp.ClientConnectorError):
                 print(f"\n{F.YELLOW}Connection issue: Unable to reach Discord servers.{R}")
@@ -1235,17 +1240,27 @@ if __name__ == "__main__":
                 print(f"{F.YELLOW}  - DNS resolution failed{R}")
                 print(f"{F.YELLOW}  - Discord is blocked by firewall/ISP{R}")
                 print(f"{F.YELLOW}  - VPS network issues{R}")
-                print(f"{F.YELLOW}Retrying in 30 seconds...{R}")
-                await asyncio.sleep(30)
+                print(f"{F.YELLOW}Retrying in {reconnect_delay} seconds...{R}")
+                await asyncio.sleep(reconnect_delay)
 
             except OSError as e:
                 if e.errno in (-3, 11001):  # DNS errors (Linux/Windows)
                     print(f"\n{F.YELLOW}Connection issue: DNS resolution failed.{R}")
                     print(f"{F.YELLOW}Check your DNS settings or try different DNS servers.{R}")
-                    print(f"{F.YELLOW}Retrying in 30 seconds...{R}")
-                    await asyncio.sleep(30)
+                    print(f"{F.YELLOW}Retrying in {reconnect_delay} seconds...{R}")
+                    await asyncio.sleep(reconnect_delay)
                 else:
                     raise
+
+            except Exception as e:
+                print(f"\n{F.RED}Unexpected runtime error: {type(e).__name__}: {e}{R}")
+                print(f"{F.YELLOW}Retrying in {reconnect_delay} seconds...{R}")
+                await asyncio.sleep(reconnect_delay)
+
+            reconnect_delay = min(reconnect_delay * 2, max_reconnect_delay)
+
+            if bot.is_closed():
+                bot.clear()
 
     def run_bot():
         import signal
