@@ -2,7 +2,99 @@
 {% block content %}
 <section class="hero-card">
   <h1>{{ 'Control Panel' if lang == 'en' else 'لوحة التحكم' }}</h1>
-  <p>{{ 'Manage dropdown fields and options used in the registration form.' if lang == 'en' else 'إدارة الحقول المنسدلة والخيارات المستخدمة في نموذج التسجيل.' }}</p>
+  <p>{{ 'Manage state number, state alliances, list activation, and dropdown fields.' if lang == 'en' else 'إدارة رقم الولاية وتحالفات الولاية وتفعيل القوائم والحقول المنسدلة.' }}</p>
+</section>
+
+<div class="layout">
+  <section class="panel">
+    <h2>{{ 'State Setup' if lang == 'en' else 'إعداد الولاية' }}</h2>
+    <form method="post" action="/dashboard/settings/state" class="form-grid">
+      <label>
+        <span>{{ 'State Number' if lang == 'en' else 'رقم الولاية' }}</span>
+        <input type="text" name="state_number" value="{{ state_number }}" required />
+      </label>
+      <button class="btn btn-primary" type="submit">{{ 'Save State' if lang == 'en' else 'حفظ الولاية' }}</button>
+    </form>
+  </section>
+
+  <section class="panel">
+    <h2>{{ 'Add State Alliance' if lang == 'en' else 'إضافة تحالف للولاية' }}</h2>
+    <form method="post" action="/dashboard/state-alliances" class="form-grid">
+      <label>
+        <span>{{ 'Alliance Tag / Logo' if lang == 'en' else 'شعار / اختصار التحالف' }}</span>
+        <input type="text" name="alliance_tag" required />
+      </label>
+      <button class="btn" type="submit">{{ 'Add Alliance' if lang == 'en' else 'إضافة التحالف' }}</button>
+    </form>
+  </section>
+</div>
+
+<section class="panel table-panel">
+  <h2>{{ 'State Alliances' if lang == 'en' else 'تحالفات الولاية' }}</h2>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>{{ 'State' if lang == 'en' else 'الولاية' }}</th>
+          <th>{{ 'Alliance Tag' if lang == 'en' else 'اختصار التحالف' }}</th>
+          <th>{{ 'By' if lang == 'en' else 'بواسطة' }}</th>
+          <th>{{ 'Action' if lang == 'en' else 'إجراء' }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for alliance in alliances %}
+        {% set delete_alliance_message = 'Delete this alliance tag?' if lang == 'en' else 'حذف هذا التحالف؟' %}
+        <tr>
+          <td>{{ alliance.id }}</td>
+          <td>{{ alliance.state_number }}</td>
+          <td><strong>{{ alliance.alliance_tag }}</strong></td>
+          <td>{{ alliance.username or 'system' }}</td>
+          <td>
+            <form method="post" action="/dashboard/state-alliances/{{ alliance.id }}/delete" onsubmit="return confirm('{{ delete_alliance_message }}')">
+              <button class="btn btn-danger btn-sm" type="submit">{{ 'Delete' if lang == 'en' else 'حذف' }}</button>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="5">{{ 'No alliances registered for the current state yet.' if lang == 'en' else 'لا توجد تحالفات مسجلة للولاية الحالية بعد.' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="panel table-panel">
+  <h2>{{ 'List Activation' if lang == 'en' else 'تفعيل القوائم' }}</h2>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>{{ 'List' if lang == 'en' else 'القائمة' }}</th>
+          <th>{{ 'Status' if lang == 'en' else 'الحالة' }}</th>
+          <th>{{ 'Action' if lang == 'en' else 'إجراء' }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in list_configs %}
+        <tr>
+          <td>{{ item.label }}</td>
+          <td>{{ ('Enabled' if item.is_enabled else 'Disabled') if lang == 'en' else ('مفعلة' if item.is_enabled else 'معطلة') }}</td>
+          <td>
+            <form method="post" action="/dashboard/lists/{{ item.list_key }}">
+              <input type="hidden" name="is_enabled" value="{{ 0 if item.is_enabled else 1 }}" />
+              <button class="btn {% if item.is_enabled %}btn-danger{% else %}btn-primary{% endif %}" type="submit">
+                {{ ('Disable' if item.is_enabled else 'Enable') if lang == 'en' else ('تعطيل' if item.is_enabled else 'تفعيل') }}
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
 </section>
 
 <div class="layout">
@@ -104,7 +196,11 @@
         <tr>
           <th>ID</th>
           <th>{{ 'Username' if lang == 'en' else 'اسم المستخدم' }}</th>
+          <th>{{ 'Email' if lang == 'en' else 'الإيميل' }}</th>
+          <th>{{ 'Provider' if lang == 'en' else 'مزود الدخول' }}</th>
+          <th>{{ 'State' if lang == 'en' else 'الولاية' }}</th>
           <th>{{ 'Role' if lang == 'en' else 'الدور' }}</th>
+          <th>{{ 'Action' if lang == 'en' else 'إجراء' }}</th>
           <th>{{ 'Created At' if lang == 'en' else 'وقت الإنشاء' }}</th>
         </tr>
       </thead>
@@ -113,7 +209,18 @@
         <tr>
           <td>{{ u.id }}</td>
           <td>{{ u.username }}</td>
+          <td>{{ u.email or '-' }}</td>
+          <td>{{ u.auth_provider or 'email' }}</td>
+          <td>{{ u.state or '-' }}</td>
           <td>{{ ('Admin' if u.is_admin else 'User') if lang == 'en' else ('أدمن' if u.is_admin else 'مستخدم') }}</td>
+          <td>
+            <form method="post" action="/dashboard/users/{{ u.id }}/role">
+              <input type="hidden" name="is_admin" value="{{ 0 if u.is_admin else 1 }}" />
+              <button class="btn btn-sm {% if u.is_admin %}btn-danger{% else %}btn-primary{% endif %}" type="submit">
+                {{ ('Revoke Admin' if u.is_admin else 'Make Admin') if lang == 'en' else ('سحب الأدمن' if u.is_admin else 'جعله أدمن') }}
+              </button>
+            </form>
+          </td>
           <td>{{ u.created_at }}</td>
         </tr>
         {% endfor %}

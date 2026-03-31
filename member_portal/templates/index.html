@@ -3,13 +3,16 @@
 
 <div class="portal-header">
   <div>
-    <h1 class="portal-title">{{ 'Member Registration' if lang == 'en' else 'تسجيل الأعضاء' }}</h1>
+    <h1 class="portal-title">{{ 'Member Registry' if lang == 'en' else 'سجل الأعضاء' }}</h1>
     <p class="portal-sub">{{ 'Register a new alliance member using the form below.' if lang == 'en' else 'سجّل عضوًا جديدًا في التحالف باستخدام النموذج أدناه.' }}</p>
   </div>
-  <a class="btn btn-ghost" href="/members">
-    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
-    {{ 'View Members' if lang == 'en' else 'عرض الأعضاء' }}
-  </a>
+  <div class="portal-header-actions">
+    <a class="btn btn-ghost" href="/portal">{{ 'Back to Lists' if lang == 'en' else 'العودة للقوائم' }}</a>
+    <a class="btn btn-ghost" href="/members">
+      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
+      {{ 'View Members' if lang == 'en' else 'عرض الأعضاء' }}
+    </a>
+  </div>
 </div>
 
 <div class="registration-card">
@@ -42,7 +45,7 @@
       <div class="reg-field-card">
         <div class="reg-field-card-header">
           <span class="reg-label">{{ field.label }}{% if field.is_required %}<span class="req-star"> *</span>{% endif %}</span>
-          <button class="add-opt-btn" type="button" onclick="toggleAddOpt({{ field.id }})">
+          <button class="add-opt-btn" type="button" data-field-id="{{ field.id }}" onclick="toggleAddOpt(this.dataset.fieldId)">
             + {{ 'Add' if lang == 'en' else 'إضافة' }}
           </button>
         </div>

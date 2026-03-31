@@ -3,10 +3,15 @@ import hmac
 import os
 import secrets
 import sqlite3
+import smtplib
 import time
+from email.message import EmailMessage
 from pathlib import Path
 from typing import Any
-from aiohttp import web
+from urllib.parse import urlencode
+
+from aiohttp import ClientSession, web
+from dotenv import load_dotenv
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -14,13 +19,22 @@ DB_PATH = BASE_DIR / "portal.db"
 TEMPLATES_DIR = BASE_DIR / "templates"
 STATIC_DIR = BASE_DIR / "static"
 
+load_dotenv(BASE_DIR.parent / ".env")
+load_dotenv(BASE_DIR / ".env")
+
 SESSION_COOKIE = "member_portal_session"
 LANG_COOKIE = "portal_lang"
 SESSION_TTL_SECONDS = 60 * 60 * 24 * 7
 SECRET_KEY = os.getenv("PORTAL_SECRET_KEY", "change-me-in-production").encode("utf-8")
+RESET_TOKEN_TTL_SECONDS = 60 * 30
 
 DEFAULT_FULL_ADMIN_USERNAME = os.getenv("PORTAL_FULL_ADMIN_USERNAME", "mn9@hotmail.com")
 DEFAULT_FULL_ADMIN_PASSWORD = os.getenv("PORTAL_FULL_ADMIN_PASSWORD", "DANGER")
+
+DEFAULT_LIST_CONFIGS = [
+    {"list_key": "member_registry", "label": "Member Registry", "sort_order": 10, "is_enabled": 1},
+    {"list_key": "transfers", "label": "Transfers List", "sort_order": 20, "is_enabled": 1},
+]
 
 TRANSLATIONS = {
     "en": {
@@ -30,12 +44,30 @@ TRANSLATIONS = {
         "username_exists": "Username already exists",
         "account_created": "Account created. You can sign in now",
         "invalid_login": "Invalid username or password",
+        "invalid_email": "Please enter a valid email",
+        "email_exists": "Email already exists",
+        "email_or_username_required": "Enter username or email",
         "login_success": "Signed in successfully",
         "logout_success": "Signed out successfully",
+        "oauth_unavailable": "This login provider is not configured yet",
+        "oauth_google_missing": "Google login is not configured. Add GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI",
+        "oauth_discord_missing": "Discord login is not configured. Add DISCORD_CLIENT_ID, DISCORD_CLIENT_SECRET, DISCORD_REDIRECT_URI",
+        "oauth_failed": "Social login failed. Please try again",
+        "forgot_title": "TNT Alliance | Forgot Password",
+        "forgot_success": "If the email exists, password reset instructions have been sent",
+        "reset_sent_dev": "Reset link (dev): {link}",
+        "reset_invalid": "Invalid or expired reset link",
+        "reset_password_min": "New password must be at least 6 characters",
+        "reset_password_success": "Password has been reset. You can sign in now",
+        "role_updated": "User role updated",
+        "cannot_downgrade_full_admin": "Cannot remove admin role from the main full admin account",
         "member_required": "Player ID, Current Name, Alliance, and Rank are required",
         "required_missing": "Missing required fields: {fields}",
         "member_exists": "This member name is already registered",
         "member_saved": "Member record saved",
+        "member_updated": "Member record updated",
+        "member_deleted": "Member record deleted",
+        "member_not_found": "Member record not found",
         "field_required": "Field label and key are required",
         "field_key_exists": "Field key already exists",
         "field_added": "Field added successfully",
@@ -45,7 +77,20 @@ TRANSLATIONS = {
         "option_added": "Option added successfully",
         "option_invalid": "Enter a valid option",
         "field_not_found": "Field not found",
+        "state_number_required": "State number is required first",
+        "alliance_tag_required": "Alliance tag is required",
+        "alliance_tag_exists": "This alliance tag already exists for the selected state",
+        "alliance_tag_added": "Alliance tag saved successfully",
+        "alliance_tag_deleted": "Alliance tag deleted",
+        "settings_saved": "Settings saved successfully",
+        "list_updated": "List availability updated",
+        "transfer_required": "Member name, member ID, power, furnace, current state, invite type, and future alliance are required",
+        "transfer_saved": "Transfer record saved",
+        "all_members_deleted": "All member records deleted",
+        "all_transfers_deleted": "All transfer records deleted",
         "portal_title": "TNT Alliance | Portal",
+        "lists_title": "TNT Alliance | Lists",
+        "transfers_title": "TNT Alliance | Transfers",
         "members_title": "TNT Alliance | Members",
         "auth_title": "TNT Alliance | Login",
         "admin_title": "TNT Alliance | Admin",
@@ -57,12 +102,30 @@ TRANSLATIONS = {
         "username_exists": "اسم المستخدم مستخدم مسبقًا",
         "account_created": "تم إنشاء الحساب، سجل دخولك الآن",
         "invalid_login": "بيانات الدخول غير صحيحة",
+        "invalid_email": "يرجى إدخال بريد إلكتروني صحيح",
+        "email_exists": "البريد الإلكتروني مستخدم مسبقًا",
+        "email_or_username_required": "أدخل اسم المستخدم أو البريد الإلكتروني",
         "login_success": "تم تسجيل الدخول",
         "logout_success": "تم تسجيل الخروج",
+        "oauth_unavailable": "موفر تسجيل الدخول هذا غير مُعد بعد",
+        "oauth_google_missing": "تسجيل Google غير مُعد. أضف GOOGLE_CLIENT_ID و GOOGLE_CLIENT_SECRET و GOOGLE_REDIRECT_URI",
+        "oauth_discord_missing": "تسجيل Discord غير مُعد. أضف DISCORD_CLIENT_ID و DISCORD_CLIENT_SECRET و DISCORD_REDIRECT_URI",
+        "oauth_failed": "فشل تسجيل الدخول الاجتماعي، حاول مرة أخرى",
+        "forgot_title": "تحالف TNT | نسيت كلمة المرور",
+        "forgot_success": "إذا كان البريد موجودًا فسيتم إرسال تعليمات إعادة التعيين",
+        "reset_sent_dev": "رابط إعادة التعيين (تجريبي): {link}",
+        "reset_invalid": "رابط إعادة التعيين غير صالح أو منتهي",
+        "reset_password_min": "كلمة المرور الجديدة يجب أن تكون 6 أحرف على الأقل",
+        "reset_password_success": "تمت إعادة تعيين كلمة المرور، يمكنك تسجيل الدخول الآن",
+        "role_updated": "تم تحديث صلاحية المستخدم",
+        "cannot_downgrade_full_admin": "لا يمكن سحب صلاحية الأدمن من حساب الأدمن الرئيسي",
         "member_required": "Player ID و Current Name و Alliance و Rank مطلوبة",
         "required_missing": "حقول مطلوبة ناقصة: {fields}",
         "member_exists": "اسم العضو مسجل مسبقًا",
         "member_saved": "تم حفظ سجل العضو",
+        "member_updated": "تم تحديث سجل العضو",
+        "member_deleted": "تم حذف سجل العضو",
+        "member_not_found": "سجل العضو غير موجود",
         "field_required": "عنوان ومفتاح الحقل مطلوبان",
         "field_key_exists": "مفتاح الحقل مستخدم",
         "field_added": "تمت إضافة الحقل",
@@ -72,7 +135,20 @@ TRANSLATIONS = {
         "option_added": "تمت إضافة الخيار",
         "option_invalid": "اكتب خيارًا صالحًا",
         "field_not_found": "الحقل غير موجود",
+        "state_number_required": "يجب تسجيل رقم الولاية أولاً",
+        "alliance_tag_required": "شعار أو اختصار التحالف مطلوب",
+        "alliance_tag_exists": "شعار التحالف مسجل مسبقًا في هذه الولاية",
+        "alliance_tag_added": "تم حفظ شعار التحالف",
+        "alliance_tag_deleted": "تم حذف شعار التحالف",
+        "settings_saved": "تم حفظ الإعدادات بنجاح",
+        "list_updated": "تم تحديث حالة القائمة",
+        "transfer_required": "اسم العضو ومعرف العضو والقوة والفرن والولاية الحالية ونوع الدعوة والتحالف المستقبلي مطلوبة",
+        "transfer_saved": "تم حفظ سجل التحويل",
+        "all_members_deleted": "تم حذف جميع سجلات الأعضاء",
+        "all_transfers_deleted": "تم حذف جميع سجلات التحويلات",
         "portal_title": "تحالف TNT | التسجيل",
+        "lists_title": "تحالف TNT | القوائم",
+        "transfers_title": "تحالف TNT | التحويلات",
         "members_title": "تحالف TNT | الأعضاء",
         "auth_title": "تحالف TNT | الدخول",
         "admin_title": "تحالف TNT | الإدارة",
@@ -188,9 +264,51 @@ def init_db() -> None:
                 FOREIGN KEY(record_id) REFERENCES member_records(id) ON DELETE CASCADE,
                 FOREIGN KEY(field_id) REFERENCES dropdown_fields(id)
             );
+
+            CREATE TABLE IF NOT EXISTS portal_settings (
+                setting_key TEXT PRIMARY KEY,
+                setting_value TEXT NOT NULL DEFAULT ''
+            );
+
+            CREATE TABLE IF NOT EXISTS state_alliances (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                state_number TEXT NOT NULL,
+                alliance_tag TEXT NOT NULL,
+                created_by INTEGER,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(state_number, alliance_tag),
+                FOREIGN KEY(created_by) REFERENCES users(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS list_configs (
+                list_key TEXT PRIMARY KEY,
+                label TEXT NOT NULL,
+                sort_order INTEGER NOT NULL DEFAULT 100,
+                is_enabled INTEGER NOT NULL DEFAULT 1
+            );
+
+            CREATE TABLE IF NOT EXISTS transfer_records (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                member_name TEXT NOT NULL,
+                member_uid TEXT NOT NULL,
+                power TEXT NOT NULL,
+                furnace TEXT NOT NULL,
+                current_state TEXT NOT NULL,
+                invite_type TEXT NOT NULL DEFAULT '',
+                future_alliance TEXT NOT NULL,
+                created_by INTEGER,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(created_by) REFERENCES users(id)
+            );
             """
         )
 
+        migrate_member_record_columns(conn)
+        migrate_user_state_column(conn)
+        migrate_user_auth_columns(conn)
+        migrate_transfer_record_columns(conn)
+        create_oauth_identities_table(conn)
+        create_password_resets_table(conn)
         ensure_admin_account(
             conn,
             username="admin",
@@ -201,9 +319,8 @@ def init_db() -> None:
             username=DEFAULT_FULL_ADMIN_USERNAME,
             password=DEFAULT_FULL_ADMIN_PASSWORD,
         )
-        migrate_member_record_columns(conn)
         ensure_default_dropdown_fields(conn)
-        migrate_user_state_column(conn)
+        ensure_default_list_configs(conn)
 
 
 def migrate_member_record_columns(conn: sqlite3.Connection) -> None:
@@ -222,6 +339,53 @@ def migrate_user_state_column(conn: sqlite3.Connection) -> None:
     columns = {row["name"] for row in conn.execute("PRAGMA table_info(users)").fetchall()}
     if "state" not in columns:
         conn.execute("ALTER TABLE users ADD COLUMN state TEXT NOT NULL DEFAULT ''")
+
+
+def migrate_user_auth_columns(conn: sqlite3.Connection) -> None:
+    columns = {row["name"] for row in conn.execute("PRAGMA table_info(users)").fetchall()}
+    if "email" not in columns:
+        conn.execute("ALTER TABLE users ADD COLUMN email TEXT NOT NULL DEFAULT ''")
+    if "auth_provider" not in columns:
+        conn.execute("ALTER TABLE users ADD COLUMN auth_provider TEXT NOT NULL DEFAULT 'email'")
+
+
+def create_oauth_identities_table(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS oauth_identities (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            provider TEXT NOT NULL,
+            provider_user_id TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(provider, provider_user_id),
+            UNIQUE(user_id, provider),
+            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+        )
+        """
+    )
+
+
+def create_password_resets_table(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS password_resets (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            token_hash TEXT NOT NULL UNIQUE,
+            expires_at INTEGER NOT NULL,
+            used_at INTEGER,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+        )
+        """
+    )
+
+
+def migrate_transfer_record_columns(conn: sqlite3.Connection) -> None:
+    columns = {row["name"] for row in conn.execute("PRAGMA table_info(transfer_records)").fetchall()}
+    if "invite_type" not in columns:
+        conn.execute("ALTER TABLE transfer_records ADD COLUMN invite_type TEXT NOT NULL DEFAULT ''")
 
 
 def ensure_default_dropdown_fields(conn: sqlite3.Connection) -> None:
@@ -255,6 +419,18 @@ def ensure_default_dropdown_fields(conn: sqlite3.Connection) -> None:
             )
 
 
+def ensure_default_list_configs(conn: sqlite3.Connection) -> None:
+    for item in DEFAULT_LIST_CONFIGS:
+        conn.execute(
+            """
+            INSERT INTO list_configs (list_key, label, sort_order, is_enabled)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(list_key) DO UPDATE SET label = excluded.label, sort_order = excluded.sort_order
+            """,
+            (item["list_key"], item["label"], item["sort_order"], item["is_enabled"]),
+        )
+
+
 def ensure_admin_account(conn: sqlite3.Connection, username: str, password: str) -> None:
     existing = conn.execute(
         "SELECT id FROM users WHERE username = ? LIMIT 1",
@@ -263,15 +439,31 @@ def ensure_admin_account(conn: sqlite3.Connection, username: str, password: str)
 
     if existing:
         conn.execute(
-            "UPDATE users SET password_hash = ?, is_admin = 1 WHERE id = ?",
+            "UPDATE users SET password_hash = ?, is_admin = 1, auth_provider = 'email' WHERE id = ?",
             (hash_password(password), existing["id"]),
         )
         return
 
     conn.execute(
-        "INSERT INTO users (username, password_hash, is_admin) VALUES (?, ?, 1)",
+        "INSERT INTO users (username, password_hash, is_admin, email, auth_provider) VALUES (?, ?, 1, '', 'email')",
         (username, hash_password(password)),
     )
+
+
+def normalize_email(raw_email: str) -> str:
+    return raw_email.strip().lower()
+
+
+def is_valid_email(raw_email: str) -> bool:
+    email = normalize_email(raw_email)
+    return "@" in email and "." in email.split("@")[-1] and len(email) >= 6
+
+
+def is_full_admin_username(username: str) -> bool:
+    return username.strip().lower() in {
+        "admin",
+        DEFAULT_FULL_ADMIN_USERNAME.strip().lower(),
+    }
 
 
 def hash_password(raw_password: str) -> str:
@@ -291,6 +483,33 @@ def verify_password(raw_password: str, stored: str) -> bool:
         "sha256", raw_password.encode("utf-8"), salt.encode("utf-8"), 130000
     ).hex()
     return hmac.compare_digest(check, digest)
+
+
+def hash_reset_token(raw_token: str) -> str:
+    return hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
+
+
+def issue_oauth_state(provider: str) -> str:
+    expires_at = int(time.time()) + 600
+    nonce = secrets.token_hex(12)
+    payload = f"{provider}:{expires_at}:{nonce}"
+    signature = sign_session(payload)
+    return f"{payload}:{signature}"
+
+
+def parse_oauth_state(state_token: str | None) -> str | None:
+    if not state_token:
+        return None
+    try:
+        provider, expires_s, nonce, signature = state_token.split(":", 3)
+        payload = f"{provider}:{expires_s}:{nonce}"
+        if not hmac.compare_digest(signature, sign_session(payload)):
+            return None
+        if int(expires_s) < int(time.time()):
+            return None
+        return provider
+    except (TypeError, ValueError):
+        return None
 
 
 def sign_session(payload: str) -> str:
@@ -383,6 +602,143 @@ def render_template(request: web.Request, template_name: str, context: dict[str,
     return response
 
 
+def get_oauth_config(provider: str) -> dict[str, str] | None:
+    p = provider.lower().strip()
+    if p == "google":
+        client_id = os.getenv("GOOGLE_CLIENT_ID", "").strip()
+        client_secret = os.getenv("GOOGLE_CLIENT_SECRET", "").strip()
+        redirect_uri = os.getenv("GOOGLE_REDIRECT_URI", "").strip()
+        if not all([client_id, client_secret, redirect_uri]):
+            return None
+        return {
+            "provider": "google",
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "redirect_uri": redirect_uri,
+            "authorize_url": "https://accounts.google.com/o/oauth2/v2/auth",
+            "token_url": "https://oauth2.googleapis.com/token",
+            "userinfo_url": "https://www.googleapis.com/oauth2/v3/userinfo",
+            "scope": "openid email profile",
+        }
+
+    if p == "discord":
+        client_id = os.getenv("DISCORD_CLIENT_ID", "").strip()
+        client_secret = os.getenv("DISCORD_CLIENT_SECRET", "").strip()
+        redirect_uri = os.getenv("DISCORD_REDIRECT_URI", "").strip()
+        if not all([client_id, client_secret, redirect_uri]):
+            return None
+        return {
+            "provider": "discord",
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "redirect_uri": redirect_uri,
+            "authorize_url": "https://discord.com/api/oauth2/authorize",
+            "token_url": "https://discord.com/api/oauth2/token",
+            "userinfo_url": "https://discord.com/api/users/@me",
+            "scope": "identify email",
+        }
+
+    return None
+
+
+def ensure_unique_username(conn: sqlite3.Connection, base_username: str) -> str:
+    candidate = base_username
+    for i in range(1, 2000):
+        exists = conn.execute(
+            "SELECT 1 FROM users WHERE username = ? LIMIT 1",
+            (candidate,),
+        ).fetchone()
+        if not exists:
+            return candidate
+        candidate = f"{base_username}{i}"
+    return f"{base_username}_{secrets.token_hex(2)}"
+
+
+def upsert_oauth_user(
+    conn: sqlite3.Connection,
+    provider: str,
+    provider_user_id: str,
+    email: str,
+    display_name: str,
+) -> int:
+    identity = conn.execute(
+        """
+        SELECT u.id
+        FROM oauth_identities oi
+        JOIN users u ON u.id = oi.user_id
+        WHERE oi.provider = ? AND oi.provider_user_id = ?
+        LIMIT 1
+        """,
+        (provider, provider_user_id),
+    ).fetchone()
+    if identity:
+        return int(identity["id"])
+
+    user_row = None
+    if email:
+        user_row = conn.execute(
+            "SELECT id FROM users WHERE email = ? LIMIT 1",
+            (email,),
+        ).fetchone()
+
+    if user_row:
+        user_id = int(user_row["id"])
+    else:
+        safe_seed = "".join(ch for ch in display_name.lower() if ch.isalnum())[:14] or provider
+        if len(safe_seed) < 3:
+            safe_seed = f"{provider}user"
+        username = ensure_unique_username(conn, f"{safe_seed}_{provider}"[:20])
+        password_hash = hash_password(secrets.token_urlsafe(24))
+        cur = conn.execute(
+            """
+            INSERT INTO users (username, password_hash, is_admin, state, email, auth_provider)
+            VALUES (?, ?, 0, '', ?, ?)
+            """,
+            (username, password_hash, email, provider),
+        )
+        user_id = int(cur.lastrowid)
+
+    conn.execute(
+        """
+        INSERT INTO oauth_identities (user_id, provider, provider_user_id)
+        VALUES (?, ?, ?)
+        ON CONFLICT(provider, provider_user_id) DO NOTHING
+        """,
+        (user_id, provider, provider_user_id),
+    )
+    return user_id
+
+
+def send_password_reset_email(target_email: str, reset_link: str) -> bool:
+    smtp_host = os.getenv("SMTP_HOST", "").strip()
+    smtp_port = int(os.getenv("SMTP_PORT", "587").strip() or "587")
+    smtp_user = os.getenv("SMTP_USER", "").strip()
+    smtp_password = os.getenv("SMTP_PASSWORD", "").strip()
+    smtp_from = os.getenv("SMTP_FROM", smtp_user).strip()
+
+    if not all([smtp_host, smtp_user, smtp_password, smtp_from]):
+        return False
+
+    msg = EmailMessage()
+    msg["Subject"] = "TNT Portal Password Reset"
+    msg["From"] = smtp_from
+    msg["To"] = target_email
+    msg.set_content(
+        "Use this link to reset your password:\n"
+        f"{reset_link}\n\n"
+        "If you did not request this, ignore this email."
+    )
+
+    try:
+        with smtplib.SMTP(smtp_host, smtp_port, timeout=15) as smtp:
+            smtp.starttls()
+            smtp.login(smtp_user, smtp_password)
+            smtp.send_message(msg)
+        return True
+    except Exception:
+        return False
+
+
 def fetch_fields_and_options(conn: sqlite3.Connection) -> list[dict[str, Any]]:
     fields = conn.execute(
         "SELECT id, field_key, label, sort_order, is_required FROM dropdown_fields ORDER BY sort_order, id"
@@ -405,6 +761,91 @@ def fetch_fields_and_options(conn: sqlite3.Connection) -> list[dict[str, Any]]:
             }
         )
     return result
+
+
+def get_setting(conn: sqlite3.Connection, key: str, default: str = "") -> str:
+    row = conn.execute(
+        "SELECT setting_value FROM portal_settings WHERE setting_key = ? LIMIT 1",
+        (key,),
+    ).fetchone()
+    if not row:
+        return default
+    return str(row["setting_value"])
+
+
+def set_setting(conn: sqlite3.Connection, key: str, value: str) -> None:
+    conn.execute(
+        """
+        INSERT INTO portal_settings (setting_key, setting_value)
+        VALUES (?, ?)
+        ON CONFLICT(setting_key) DO UPDATE SET setting_value = excluded.setting_value
+        """,
+        (key, value),
+    )
+
+
+def fetch_state_alliances(conn: sqlite3.Connection, state_number: str) -> list[dict[str, Any]]:
+    rows = conn.execute(
+        """
+        SELECT a.id, a.state_number, a.alliance_tag, a.created_at, u.username
+        FROM state_alliances a
+        LEFT JOIN users u ON u.id = a.created_by
+        WHERE a.state_number = ?
+        ORDER BY a.alliance_tag COLLATE NOCASE ASC, a.id ASC
+        """,
+        (state_number,),
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def fetch_list_configs(conn: sqlite3.Connection) -> list[dict[str, Any]]:
+    rows = conn.execute(
+        "SELECT list_key, label, sort_order, is_enabled FROM list_configs ORDER BY sort_order, list_key"
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def is_list_enabled(conn: sqlite3.Connection, list_key: str) -> bool:
+    row = conn.execute(
+        "SELECT is_enabled FROM list_configs WHERE list_key = ? LIMIT 1",
+        (list_key,),
+    ).fetchone()
+    if not row:
+        return False
+    return bool(row["is_enabled"])
+
+
+def build_portal_cards(lang: str, configs: list[dict[str, Any]]) -> list[dict[str, str]]:
+    metadata = {
+        "member_registry": {
+            "title_en": "Member Registry",
+            "title_ar": "سجل الأعضاء",
+            "desc_en": "Register alliance members with fixed fields and troop levels.",
+            "desc_ar": "تسجيل أعضاء التحالف مع الحقول الثابتة ومستويات القوات.",
+            "href": "/member-records/new",
+        },
+        "transfers": {
+            "title_en": "Transfers List",
+            "title_ar": "قائمة التحويلات",
+            "desc_en": "Track transfer requests using the state alliances dropdown.",
+            "desc_ar": "تسجيل التحويلات باستخدام قائمة تحالفات الولاية المنسدلة.",
+            "href": "/transfers",
+        },
+    }
+    cards: list[dict[str, str]] = []
+    for item in configs:
+        if not item["is_enabled"] or item["list_key"] not in metadata:
+            continue
+        meta = metadata[item["list_key"]]
+        cards.append(
+            {
+                "list_key": item["list_key"],
+                "title": meta["title_en"] if lang == "en" else meta["title_ar"],
+                "description": meta["desc_en"] if lang == "en" else meta["desc_ar"],
+                "href": meta["href"],
+            }
+        )
+    return cards
 
 
 async def auth_page(request: web.Request) -> web.Response:
@@ -432,7 +873,70 @@ async def register_page(request: web.Request) -> web.Response:
     )
 
 
+async def forgot_password_page(request: web.Request) -> web.Response:
+    if get_current_user(request):
+        raise web.HTTPFound(location="/portal")
+    return render_template(
+        request,
+        "forgot_password.html",
+        {
+            "title": translate_request(request, "forgot_title"),
+        },
+    )
+
+
+async def reset_password_page(request: web.Request) -> web.Response:
+    token = str(request.query.get("token", "")).strip()
+    if not token:
+        return flash_response("/forgot-password", translate_request(request, "reset_invalid"), "error")
+
+    with get_db() as conn:
+        row = conn.execute(
+            """
+            SELECT id
+            FROM password_resets
+            WHERE token_hash = ? AND used_at IS NULL AND expires_at >= ?
+            LIMIT 1
+            """,
+            (hash_reset_token(token), int(time.time())),
+        ).fetchone()
+
+    if not row:
+        return flash_response("/forgot-password", translate_request(request, "reset_invalid"), "error")
+
+    return render_template(
+        request,
+        "reset_password.html",
+        {
+            "title": "TNT Alliance | Reset Password" if get_lang(request) == "en" else "تحالف TNT | إعادة تعيين كلمة المرور",
+            "token": token,
+        },
+    )
+
+
 async def portal_page(request: web.Request) -> web.Response:
+    user = get_current_user(request)
+    if not user:
+        return flash_response("/", translate_request(request, "login_required"), "error")
+
+    with get_db() as conn:
+        list_configs = fetch_list_configs(conn)
+        state_number = get_setting(conn, "state_number")
+        alliances = fetch_state_alliances(conn, state_number) if state_number else []
+
+    return render_template(
+        request,
+        "portal_home.html",
+        {
+            "title": translate_request(request, "lists_title"),
+            "cards": build_portal_cards(get_lang(request), list_configs),
+            "state_number": state_number,
+            "alliances": alliances,
+        },
+    )
+
+
+async def member_registry_page(request: web.Request) -> web.Response:
     user = get_current_user(request)
     if not user:
         return flash_response("/", translate_request(request, "login_required"), "error")
@@ -498,6 +1002,39 @@ async def members_page(request: web.Request) -> web.Response:
     )
 
 
+async def transfers_page(request: web.Request) -> web.Response:
+    user = get_current_user(request)
+    if not user:
+        return flash_response("/", translate_request(request, "login_required"), "error")
+
+    with get_db() as conn:
+        if not is_list_enabled(conn, "transfers") and not user["is_admin"]:
+            return flash_response("/portal", translate_request(request, "admin_required"), "error")
+
+        state_number = get_setting(conn, "state_number")
+        alliances = fetch_state_alliances(conn, state_number) if state_number else []
+        records = conn.execute(
+            """
+            SELECT t.id, t.member_name, t.member_uid, t.power, t.furnace, t.current_state, t.invite_type, t.future_alliance, t.created_at, u.username
+            FROM transfer_records t
+            LEFT JOIN users u ON u.id = t.created_by
+            ORDER BY t.id DESC
+            LIMIT 100
+            """
+        ).fetchall()
+
+    return render_template(
+        request,
+        "transfers.html",
+        {
+            "title": translate_request(request, "transfers_title"),
+            "state_number": state_number,
+            "alliances": alliances,
+            "records": [dict(row) for row in records],
+        },
+    )
+
+
 async def set_language(request: web.Request) -> web.StreamResponse:
     data = await request.post()
     selected_lang = str(data.get("lang", "en")).strip().lower()
@@ -515,16 +1052,22 @@ async def register_user(request: web.Request) -> web.StreamResponse:
     data = await request.post()
     username = str(data.get("username", "")).strip()
     password = str(data.get("password", "")).strip()
+    email = normalize_email(str(data.get("email", "")))
     state = str(data.get("state", "")).strip()
 
     if len(username) < 3 or len(password) < 6:
         return flash_response("/register-page", translate_request(request, "username_password_min"), "error")
+    if not is_valid_email(email):
+        return flash_response("/register-page", translate_request(request, "invalid_email"), "error")
 
     with get_db() as conn:
+        email_exists = conn.execute("SELECT 1 FROM users WHERE email = ? LIMIT 1", (email,)).fetchone()
+        if email_exists:
+            return flash_response("/register-page", translate_request(request, "email_exists"), "error")
         try:
             conn.execute(
-                "INSERT INTO users (username, password_hash, is_admin, state) VALUES (?, ?, 0, ?)",
-                (username, hash_password(password), state),
+                "INSERT INTO users (username, password_hash, is_admin, state, email, auth_provider) VALUES (?, ?, 0, ?, ?, 'email')",
+                (username, hash_password(password), state, email),
             )
         except sqlite3.IntegrityError:
             return flash_response("/register-page", translate_request(request, "username_exists"), "error")
@@ -534,13 +1077,16 @@ async def register_user(request: web.Request) -> web.StreamResponse:
 
 async def login_user(request: web.Request) -> web.StreamResponse:
     data = await request.post()
-    username = str(data.get("username", "")).strip()
+    login_id = str(data.get("login_id", "")).strip()
     password = str(data.get("password", "")).strip()
+
+    if not login_id:
+        return flash_response("/", translate_request(request, "email_or_username_required"), "error")
 
     with get_db() as conn:
         user = conn.execute(
-            "SELECT id, password_hash FROM users WHERE username = ?",
-            (username,),
+            "SELECT id, password_hash FROM users WHERE username = ? OR email = ? LIMIT 1",
+            (login_id, normalize_email(login_id)),
         ).fetchone()
 
     if not user or not verify_password(password, user["password_hash"]):
@@ -565,6 +1111,165 @@ async def logout_user(request: web.Request) -> web.StreamResponse:
     return resp
 
 
+async def forgot_password_request(request: web.Request) -> web.StreamResponse:
+    data = await request.post()
+    email = normalize_email(str(data.get("email", "")))
+    if not is_valid_email(email):
+        return flash_response("/forgot-password", translate_request(request, "invalid_email"), "error")
+
+    with get_db() as conn:
+        user = conn.execute("SELECT id FROM users WHERE email = ? LIMIT 1", (email,)).fetchone()
+        reset_link = ""
+        if user:
+            token = secrets.token_urlsafe(32)
+            expires_at = int(time.time()) + RESET_TOKEN_TTL_SECONDS
+            conn.execute(
+                "INSERT INTO password_resets (user_id, token_hash, expires_at) VALUES (?, ?, ?)",
+                (user["id"], hash_reset_token(token), expires_at),
+            )
+            origin = f"{request.scheme}://{request.host}"
+            reset_link = f"{origin}/reset-password?token={token}"
+            sent = send_password_reset_email(email, reset_link)
+            if not sent:
+                return flash_response(
+                    "/forgot-password",
+                    translate_request(request, "reset_sent_dev", link=reset_link),
+                    "info",
+                )
+
+    return flash_response("/forgot-password", translate_request(request, "forgot_success"), "success")
+
+
+async def reset_password_submit(request: web.Request) -> web.StreamResponse:
+    data = await request.post()
+    token = str(data.get("token", "")).strip()
+    new_password = str(data.get("new_password", "")).strip()
+
+    if len(new_password) < 6:
+        return flash_response(f"/reset-password?token={token}", translate_request(request, "reset_password_min"), "error")
+
+    token_hash = hash_reset_token(token)
+    now_ts = int(time.time())
+
+    with get_db() as conn:
+        row = conn.execute(
+            """
+            SELECT id, user_id
+            FROM password_resets
+            WHERE token_hash = ? AND used_at IS NULL AND expires_at >= ?
+            LIMIT 1
+            """,
+            (token_hash, now_ts),
+        ).fetchone()
+        if not row:
+            return flash_response("/forgot-password", translate_request(request, "reset_invalid"), "error")
+
+        conn.execute(
+            "UPDATE users SET password_hash = ? WHERE id = ?",
+            (hash_password(new_password), row["user_id"]),
+        )
+        conn.execute(
+            "UPDATE password_resets SET used_at = ? WHERE id = ?",
+            (now_ts, row["id"]),
+        )
+
+    return flash_response("/", translate_request(request, "reset_password_success"), "success")
+
+
+async def oauth_start(request: web.Request) -> web.StreamResponse:
+    provider = str(request.match_info.get("provider", "")).strip().lower()
+    cfg = get_oauth_config(provider)
+    if not cfg:
+        if provider == "google":
+            return flash_response("/", translate_request(request, "oauth_google_missing"), "error")
+        if provider == "discord":
+            return flash_response("/", translate_request(request, "oauth_discord_missing"), "error")
+        return flash_response("/", translate_request(request, "oauth_unavailable"), "error")
+
+    state = issue_oauth_state(provider)
+    query = urlencode(
+        {
+            "client_id": cfg["client_id"],
+            "redirect_uri": cfg["redirect_uri"],
+            "response_type": "code",
+            "scope": cfg["scope"],
+            "state": state,
+            "prompt": "select_account" if provider == "google" else "consent",
+        }
+    )
+    auth_url = f"{cfg['authorize_url']}?{query}"
+    resp = web.HTTPFound(location=auth_url)
+    resp.set_cookie("oauth_state", state, max_age=600, httponly=True, samesite="Lax")
+    return resp
+
+
+async def oauth_callback(request: web.Request) -> web.StreamResponse:
+    provider = str(request.match_info.get("provider", "")).strip().lower()
+    cfg = get_oauth_config(provider)
+    code = str(request.query.get("code", "")).strip()
+    state_q = str(request.query.get("state", "")).strip()
+    state_cookie = request.cookies.get("oauth_state")
+
+    parsed_provider = parse_oauth_state(state_q)
+    if not cfg or not code or not state_cookie or state_q != state_cookie or parsed_provider != provider:
+        return flash_response("/", translate_request(request, "oauth_failed"), "error")
+
+    try:
+        async with ClientSession() as session:
+            token_resp = await session.post(
+                cfg["token_url"],
+                data={
+                    "client_id": cfg["client_id"],
+                    "client_secret": cfg["client_secret"],
+                    "grant_type": "authorization_code",
+                    "code": code,
+                    "redirect_uri": cfg["redirect_uri"],
+                },
+                headers={"Accept": "application/json"},
+                timeout=20,
+            )
+            token_data = await token_resp.json(content_type=None)
+            access_token = str(token_data.get("access_token", ""))
+            if not access_token:
+                raise RuntimeError("No access token")
+
+            user_resp = await session.get(
+                cfg["userinfo_url"],
+                headers={"Authorization": f"Bearer {access_token}"},
+                timeout=20,
+            )
+            user_data = await user_resp.json(content_type=None)
+
+        if provider == "google":
+            provider_uid = str(user_data.get("sub", "")).strip()
+            email = normalize_email(str(user_data.get("email", "")))
+            display_name = str(user_data.get("name", "google_user")).strip()
+        else:
+            provider_uid = str(user_data.get("id", "")).strip()
+            email = normalize_email(str(user_data.get("email", "")))
+            display_name = str(user_data.get("username", "discord_user")).strip()
+
+        if not provider_uid:
+            raise RuntimeError("No provider user id")
+
+        with get_db() as conn:
+            user_id = upsert_oauth_user(conn, provider, provider_uid, email, display_name)
+
+        resp = web.HTTPFound(location="/portal")
+        resp.set_cookie(
+            SESSION_COOKIE,
+            issue_session_cookie(user_id),
+            max_age=SESSION_TTL_SECONDS,
+            httponly=True,
+            samesite="Lax",
+        )
+        resp.del_cookie("oauth_state")
+        resp.set_cookie("flash", f"success|{translate_request(request, 'login_success')}", max_age=12, httponly=True, samesite="Lax")
+        return resp
+    except Exception:
+        return flash_response("/", translate_request(request, "oauth_failed"), "error")
+
+
 async def create_record(request: web.Request) -> web.StreamResponse:
     user = get_current_user(request)
     if not user:
@@ -578,7 +1283,7 @@ async def create_record(request: web.Request) -> web.StreamResponse:
     notes = str(data.get("notes", "")).strip()
 
     if not member_name or not member_uid or not alliance or not rank:
-        return flash_response("/portal", translate_request(request, "member_required"), "error")
+        return flash_response("/member-records/new", translate_request(request, "member_required"), "error")
 
     with get_db() as conn:
         duplicate = conn.execute(
@@ -586,7 +1291,7 @@ async def create_record(request: web.Request) -> web.StreamResponse:
             (member_name,),
         ).fetchone()
         if duplicate:
-            return flash_response("/portal", translate_request(request, "member_exists"), "error")
+            return flash_response("/member-records/new", translate_request(request, "member_exists"), "error")
 
         fields = fetch_fields_and_options(conn)
         missing_required = [
@@ -596,7 +1301,7 @@ async def create_record(request: web.Request) -> web.StreamResponse:
         ]
         if missing_required:
             return flash_response(
-                "/portal",
+                "/member-records/new",
                 translate_request(request, "required_missing", fields=", ".join(missing_required)),
                 "error",
             )
@@ -618,7 +1323,182 @@ async def create_record(request: web.Request) -> web.StreamResponse:
                     (record_id, field["id"], selected_value),
                 )
 
-    return flash_response("/portal", translate_request(request, "member_saved"), "success")
+    return flash_response("/member-records/new", translate_request(request, "member_saved"), "success")
+
+
+async def save_transfer(request: web.Request) -> web.StreamResponse:
+    user = get_current_user(request)
+    if not user:
+        return flash_response("/", translate_request(request, "login_required"), "error")
+
+    data = await request.post()
+    member_name = str(data.get("member_name", "")).strip()
+    member_uid = str(data.get("member_uid", "")).strip()
+    power = str(data.get("power", "")).strip()
+    furnace = str(data.get("furnace", "")).strip()
+    current_state = str(data.get("current_state", "")).strip()
+    invite_type = str(data.get("invite_type", "")).strip()
+    future_alliance = str(data.get("future_alliance", "")).strip()
+
+    if not all([member_name, member_uid, power, furnace, current_state, invite_type, future_alliance]):
+        return flash_response("/transfers", translate_request(request, "transfer_required"), "error")
+
+    with get_db() as conn:
+        conn.execute(
+            """
+            INSERT INTO transfer_records (member_name, member_uid, power, furnace, current_state, invite_type, future_alliance, created_by)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (member_name, member_uid, power, furnace, current_state, invite_type, future_alliance, user["id"]),
+        )
+
+    return flash_response("/transfers", translate_request(request, "transfer_saved"), "success")
+
+
+async def edit_record_page(request: web.Request) -> web.Response:
+    user = get_current_user(request)
+    if not user or not user["is_admin"]:
+        return flash_response("/portal", translate_request(request, "admin_required"), "error")
+
+    record_id = int(request.match_info["record_id"])
+
+    with get_db() as conn:
+        fields = fetch_fields_and_options(conn)
+        record = conn.execute(
+            """
+            SELECT id, member_name, member_uid, alliance, rank, notes
+            FROM member_records
+            WHERE id = ?
+            LIMIT 1
+            """,
+            (record_id,),
+        ).fetchone()
+        if not record:
+            return flash_response("/members", translate_request(request, "member_not_found"), "error")
+
+        values = conn.execute(
+            "SELECT field_id, option_value FROM member_record_values WHERE record_id = ?",
+            (record_id,),
+        ).fetchall()
+
+    selected_by_field = {int(v["field_id"]): str(v["option_value"]) for v in values}
+
+    return render_template(
+        request,
+        "edit_member.html",
+        {
+            "title": "Edit Member" if get_lang(request) == "en" else "تعديل عضو",
+            "record": dict(record),
+            "fields": fields,
+            "selected_by_field": selected_by_field,
+        },
+    )
+
+
+async def update_record(request: web.Request) -> web.StreamResponse:
+    user = get_current_user(request)
+    if not user or not user["is_admin"]:
+        return flash_response("/portal", translate_request(request, "admin_required"), "error")
+
+    record_id = int(request.match_info["record_id"])
+    data = await request.post()
+
+    member_name = str(data.get("current_name", "")).strip()
+    member_uid = str(data.get("player_id", "")).strip()
+    alliance = str(data.get("alliance", "")).strip()
+    rank = str(data.get("rank", "")).strip()
+    notes = str(data.get("notes", "")).strip()
+
+    if not member_name or not member_uid or not alliance or not rank:
+        return flash_response(f"/records/{record_id}/edit", translate_request(request, "member_required"), "error")
+
+    with get_db() as conn:
+        existing = conn.execute("SELECT id FROM member_records WHERE id = ? LIMIT 1", (record_id,)).fetchone()
+        if not existing:
+            return flash_response("/members", translate_request(request, "member_not_found"), "error")
+
+        duplicate = conn.execute(
+            """
+            SELECT 1 FROM member_records
+            WHERE member_name = ? COLLATE NOCASE AND id != ?
+            LIMIT 1
+            """,
+            (member_name, record_id),
+        ).fetchone()
+        if duplicate:
+            return flash_response(f"/records/{record_id}/edit", translate_request(request, "member_exists"), "error")
+
+        fields = fetch_fields_and_options(conn)
+        missing_required = [
+            f["label"]
+            for f in fields
+            if f["is_required"] and not str(data.get(f"field_{f['id']}", "")).strip()
+        ]
+        if missing_required:
+            return flash_response(
+                f"/records/{record_id}/edit",
+                translate_request(request, "required_missing", fields=", ".join(missing_required)),
+                "error",
+            )
+
+        conn.execute(
+            """
+            UPDATE member_records
+            SET member_name = ?, member_uid = ?, alliance = ?, rank = ?, notes = ?
+            WHERE id = ?
+            """,
+            (member_name, member_uid, alliance, rank, notes, record_id),
+        )
+
+        conn.execute("DELETE FROM member_record_values WHERE record_id = ?", (record_id,))
+        for field in fields:
+            selected_value = str(data.get(f"field_{field['id']}", "")).strip()
+            if selected_value:
+                conn.execute(
+                    "INSERT INTO member_record_values (record_id, field_id, option_value) VALUES (?, ?, ?)",
+                    (record_id, field["id"], selected_value),
+                )
+
+    return flash_response("/members", translate_request(request, "member_updated"), "success")
+
+
+async def delete_record(request: web.Request) -> web.StreamResponse:
+    user = get_current_user(request)
+    if not user or not user["is_admin"]:
+        return flash_response("/portal", translate_request(request, "admin_required"), "error")
+
+    record_id = int(request.match_info["record_id"])
+
+    with get_db() as conn:
+        exists = conn.execute("SELECT id FROM member_records WHERE id = ? LIMIT 1", (record_id,)).fetchone()
+        if not exists:
+            return flash_response("/members", translate_request(request, "member_not_found"), "error")
+
+        conn.execute("DELETE FROM member_records WHERE id = ?", (record_id,))
+
+    return flash_response("/members", translate_request(request, "member_deleted"), "info")
+
+
+async def delete_all_records(request: web.Request) -> web.StreamResponse:
+    user = get_current_user(request)
+    if not user or not user["is_admin"]:
+        return flash_response("/portal", translate_request(request, "admin_required"), "error")
+
+    with get_db() as conn:
+        conn.execute("DELETE FROM member_records")
+
+    return flash_response("/members", translate_request(request, "all_members_deleted"), "info")
+
+
+async def delete_all_transfers(request: web.Request) -> web.StreamResponse:
+    user = get_current_user(request)
+    if not user or not user["is_admin"]:
+        return flash_response("/portal", translate_request(request, "admin_required"), "error")
+
+    with get_db() as conn:
+        conn.execute("DELETE FROM transfer_records")
+
+    return flash_response("/transfers", translate_request(request, "all_transfers_deleted"), "info")
 
 
 async def dashboard(request: web.Request) -> web.Response:
@@ -628,8 +1508,11 @@ async def dashboard(request: web.Request) -> web.Response:
 
     with get_db() as conn:
         fields = fetch_fields_and_options(conn)
+        state_number = get_setting(conn, "state_number")
+        alliances = fetch_state_alliances(conn, state_number) if state_number else []
+        list_configs = fetch_list_configs(conn)
         users = conn.execute(
-            "SELECT id, username, is_admin, created_at FROM users ORDER BY id DESC LIMIT 50"
+            "SELECT id, username, email, auth_provider, is_admin, state, created_at FROM users ORDER BY id DESC LIMIT 50"
         ).fetchall()
 
     return render_template(
@@ -638,9 +1521,80 @@ async def dashboard(request: web.Request) -> web.Response:
         {
             "title": translate_request(request, "admin_title"),
             "fields": fields,
+            "state_number": state_number,
+            "alliances": alliances,
+            "list_configs": list_configs,
             "users": [dict(u) for u in users],
         },
     )
+
+
+async def save_state_settings(request: web.Request) -> web.StreamResponse:
+    user = get_current_user(request)
+    if not user or not user["is_admin"]:
+        return flash_response("/portal", translate_request(request, "admin_required"), "error")
+
+    data = await request.post()
+    state_number = str(data.get("state_number", "")).strip()
+    if not state_number:
+        return flash_response("/dashboard", translate_request(request, "state_number_required"), "error")
+
+    with get_db() as conn:
+        set_setting(conn, "state_number", state_number)
+
+    return flash_response("/dashboard", translate_request(request, "settings_saved"), "success")
+
+
+async def add_state_alliance(request: web.Request) -> web.StreamResponse:
+    user = get_current_user(request)
+    if not user or not user["is_admin"]:
+        return flash_response("/portal", translate_request(request, "admin_required"), "error")
+
+    data = await request.post()
+
+    with get_db() as conn:
+        state_number = get_setting(conn, "state_number")
+        alliance_tag = str(data.get("alliance_tag", "")).strip().upper()
+        if not state_number:
+            return flash_response("/dashboard", translate_request(request, "state_number_required"), "error")
+        if not alliance_tag:
+            return flash_response("/dashboard", translate_request(request, "alliance_tag_required"), "error")
+        try:
+            conn.execute(
+                "INSERT INTO state_alliances (state_number, alliance_tag, created_by) VALUES (?, ?, ?)",
+                (state_number, alliance_tag, user["id"]),
+            )
+        except sqlite3.IntegrityError:
+            return flash_response("/dashboard", translate_request(request, "alliance_tag_exists"), "error")
+
+    return flash_response("/dashboard", translate_request(request, "alliance_tag_added"), "success")
+
+
+async def delete_state_alliance(request: web.Request) -> web.StreamResponse:
+    user = get_current_user(request)
+    if not user or not user["is_admin"]:
+        return flash_response("/portal", translate_request(request, "admin_required"), "error")
+
+    alliance_id = int(request.match_info["alliance_id"])
+    with get_db() as conn:
+        conn.execute("DELETE FROM state_alliances WHERE id = ?", (alliance_id,))
+
+    return flash_response("/dashboard", translate_request(request, "alliance_tag_deleted"), "info")
+
+
+async def update_list_config(request: web.Request) -> web.StreamResponse:
+    user = get_current_user(request)
+    if not user or not user["is_admin"]:
+        return flash_response("/portal", translate_request(request, "admin_required"), "error")
+
+    list_key = request.match_info["list_key"]
+    data = await request.post()
+    is_enabled = 1 if str(data.get("is_enabled", "")).strip() == "1" else 0
+
+    with get_db() as conn:
+        conn.execute("UPDATE list_configs SET is_enabled = ? WHERE list_key = ?", (is_enabled, list_key))
+
+    return flash_response("/dashboard", translate_request(request, "list_updated"), "success")
 
 
 async def add_field(request: web.Request) -> web.StreamResponse:
@@ -738,6 +1692,31 @@ async def contribute_option(request: web.Request) -> web.StreamResponse:
     return flash_response("/portal", translate_request(request, "option_added"), "success")
 
 
+async def update_user_role(request: web.Request) -> web.StreamResponse:
+    user = get_current_user(request)
+    if not user or not user["is_admin"]:
+        return flash_response("/portal", translate_request(request, "admin_required"), "error")
+
+    target_user_id = int(request.match_info["user_id"])
+    data = await request.post()
+    is_admin = 1 if str(data.get("is_admin", "")).strip() == "1" else 0
+
+    with get_db() as conn:
+        target = conn.execute(
+            "SELECT id, username FROM users WHERE id = ? LIMIT 1",
+            (target_user_id,),
+        ).fetchone()
+        if not target:
+            return flash_response("/dashboard", translate_request(request, "member_not_found"), "error")
+
+        if is_admin == 0 and is_full_admin_username(str(target["username"])):
+            return flash_response("/dashboard", translate_request(request, "cannot_downgrade_full_admin"), "error")
+
+        conn.execute("UPDATE users SET is_admin = ? WHERE id = ?", (is_admin, target_user_id))
+
+    return flash_response("/dashboard", translate_request(request, "role_updated"), "success")
+
+
 def build_app() -> web.Application:
     init_db()
 
@@ -751,21 +1730,40 @@ def build_app() -> web.Application:
 
     app.router.add_get("/", auth_page)
     app.router.add_get("/register-page", register_page)
+    app.router.add_get("/forgot-password", forgot_password_page)
+    app.router.add_get("/reset-password", reset_password_page)
     app.router.add_get("/portal", portal_page)
+    app.router.add_get("/member-records/new", member_registry_page)
     app.router.add_get("/members", members_page)
+    app.router.add_get("/transfers", transfers_page)
 
     app.router.add_post("/register", register_user)
     app.router.add_post("/login", login_user)
+    app.router.add_post("/forgot-password/request", forgot_password_request)
+    app.router.add_post("/reset-password", reset_password_submit)
+    app.router.add_get("/oauth/{provider}/start", oauth_start)
+    app.router.add_get("/oauth/{provider}/callback", oauth_callback)
     app.router.add_get("/logout", logout_user)
     app.router.add_post("/set-language", set_language)
 
     app.router.add_post("/records/create", create_record)
+    app.router.add_post("/transfers/create", save_transfer)
+    app.router.add_get("/records/{record_id}/edit", edit_record_page)
+    app.router.add_post("/records/delete-all", delete_all_records)
+    app.router.add_post("/transfers/delete-all", delete_all_transfers)
+    app.router.add_post("/records/{record_id}/edit", update_record)
+    app.router.add_post("/records/{record_id}/delete", delete_record)
     app.router.add_post("/options/contribute", contribute_option)
 
     app.router.add_get("/dashboard", dashboard)
+    app.router.add_post("/dashboard/settings/state", save_state_settings)
+    app.router.add_post("/dashboard/state-alliances", add_state_alliance)
+    app.router.add_post("/dashboard/state-alliances/{alliance_id}/delete", delete_state_alliance)
+    app.router.add_post("/dashboard/lists/{list_key}", update_list_config)
     app.router.add_post("/dashboard/fields", add_field)
     app.router.add_post("/dashboard/fields/{field_id}/delete", delete_field)
     app.router.add_post("/dashboard/options", add_option_admin)
+    app.router.add_post("/dashboard/users/{user_id}/role", update_user_role)
 
     return app
 

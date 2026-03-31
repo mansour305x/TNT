@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="portal-header">
+  <div>
+    <h1 class="portal-title">{{ 'Transfers List' if lang == 'en' else 'قائمة التحويلات' }}</h1>
+    <p class="portal-sub">{{ 'Register transfer requests using the state alliance dropdown.' if lang == 'en' else 'سجّل طلبات التحويل باستخدام قائمة تحالفات الولاية المنسدلة.' }}</p>
+  </div>
+  <div style="display:flex;gap:.6rem;align-items:center;">
+    <a class="btn btn-ghost" href="/portal">{{ 'Back to Lists' if lang == 'en' else 'العودة للقوائم' }}</a>
+    {% if current_user and current_user.is_admin %}
+      {% set del_all_msg = 'Delete ALL transfer records? This cannot be undone.' if lang == 'en' else 'هل تريد حذف جميع سجلات التحويلات؟ لا يمكن التراجع.' %}
+      <form method="post" action="/transfers/delete-all" onsubmit="return confirm('{{ del_all_msg }}');">
+        <button class="btn btn-danger" type="submit">{{ 'Delete All' if lang == 'en' else 'حذف الكل' }}</button>
+      </form>
+    {% endif %}
+  </div>
+</div>
+
+<div class="registration-card">
+  <form method="post" action="/transfers/create">
+    <div class="reg-section-label">{{ 'Transfer Data' if lang == 'en' else 'بيانات التحويل' }}</div>
+    <div class="reg-basic-grid transfer-grid">
+      <label class="reg-field">
+        <span class="reg-label">{{ 'Member Name' if lang == 'en' else 'اسم العضو' }}</span>
+        <input type="text" name="member_name" required />
+      </label>
+      <label class="reg-field">
+        <span class="reg-label">{{ 'Member ID' if lang == 'en' else 'معرف العضو' }}</span>
+        <input type="text" name="member_uid" required />
+      </label>
+      <label class="reg-field">
+        <span class="reg-label">{{ 'Power' if lang == 'en' else 'القوة' }}</span>
+        <input type="text" name="power" required />
+      </label>
+      <label class="reg-field">
+        <span class="reg-label">{{ 'Furnace' if lang == 'en' else 'الفرن' }}</span>
+        <input type="text" name="furnace" required />
+      </label>
+      <label class="reg-field">
+        <span class="reg-label">{{ 'Current State' if lang == 'en' else 'الولاية الحالية' }}</span>
+        <input type="text" name="current_state" value="" required />
+      </label>
+      <label class="reg-field">
+        <span class="reg-label">{{ 'Invite Type' if lang == 'en' else 'نوع الدعوة' }}</span>
+        <select name="invite_type" required>
+          <option value="">— {{ 'Select' if lang == 'en' else 'اختر' }} —</option>
+          <option value="دعوة خاصة 🏷️">{{ 'Private Invite 🏷️' if lang == 'en' else 'دعوة خاصة 🏷️' }}</option>
+          <option value="دعوة عادية 👥">{{ 'Regular Invite 👥' if lang == 'en' else 'دعوة عادية 👥' }}</option>
+        </select>
+      </label>
+      <label class="reg-field">
+        <span class="reg-label">{{ 'Future Alliance' if lang == 'en' else 'التحالف المستقبلي' }}</span>
+        <select name="future_alliance" required>
+          <option value="">— {{ 'Select' if lang == 'en' else 'اختر' }} —</option>
+          {% for alliance in alliances %}
+          <option value="{{ alliance.alliance_tag }}">{{ alliance.alliance_tag }}</option>
+          {% endfor %}
+        </select>
+      </label>
+    </div>
+
+    {% if not alliances %}
+    <div class="inline-warning">{{ 'No alliances are registered for this state yet. Add them from the dashboard first.' if lang == 'en' else 'لا توجد تحالفات مسجلة لهذه الولاية بعد. أضفها أولاً من لوحة التحكم.' }}</div>
+    {% endif %}
+
+    <div class="reg-actions">
+      <button class="btn btn-primary reg-submit" type="submit">{{ 'Save Transfer' if lang == 'en' else 'حفظ التحويل' }}</button>
+    </div>
+  </form>
+</div>
+
+<div class="members-card transfer-table-card">
+  <div class="table-wrap">
+    <table class="members-table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>{{ 'Member Name' if lang == 'en' else 'اسم العضو' }}</th>
+          <th>{{ 'Member ID' if lang == 'en' else 'معرف العضو' }}</th>
+          <th>{{ 'Power' if lang == 'en' else 'القوة' }}</th>
+          <th>{{ 'Furnace' if lang == 'en' else 'الفرن' }}</th>
+          <th>{{ 'Current State' if lang == 'en' else 'الولاية الحالية' }}</th>
+          <th>{{ 'Invite Type' if lang == 'en' else 'نوع الدعوة' }}</th>
+          <th>{{ 'Future Alliance' if lang == 'en' else 'التحالف المستقبلي' }}</th>
+          <th>{{ 'By' if lang == 'en' else 'بواسطة' }}</th>
+          <th>{{ 'Date' if lang == 'en' else 'التاريخ' }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for rec in records %}
+        <tr>
+          <td class="col-seq">{{ loop.index }}</td>
+          <td><strong>{{ rec.member_name }}</strong></td>
+          <td class="uid-cell">{{ rec.member_uid }}</td>
+          <td>{{ rec.power }}</td>
+          <td>{{ rec.furnace }}</td>
+          <td>{{ rec.current_state }}</td>
+          <td><span class="value-badge badge-default">{{ rec.invite_type or '—' }}</span></td>
+          <td><span class="value-badge badge-default">{{ rec.future_alliance }}</span></td>
+          <td>{{ rec.username or 'system' }}</td>
+          <td class="date-cell">{{ rec.created_at[:10] }}</td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="10" class="empty-table-row">{{ 'No transfer records yet.' if lang == 'en' else 'لا توجد سجلات تحويل بعد.' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}

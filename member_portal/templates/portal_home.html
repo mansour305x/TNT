@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block content %}
+
+<section class="hero-card hero-royal">
+  <h1>{{ 'Operations Lists' if lang == 'en' else 'قوائم العمليات' }}</h1>
+  <p>
+    {{ 'Choose an enabled list below. The current state and alliance registry are controlled from the dashboard.' if lang == 'en' else 'اختر إحدى القوائم المفعلة بالأسفل. يتم التحكم في الولاية الحالية وسجل تحالفاتها من لوحة التحكم.' }}
+  </p>
+</section>
+
+<div class="state-summary-card">
+  <div>
+    <div class="summary-label">{{ 'Current State' if lang == 'en' else 'الولاية الحالية' }}</div>
+    <div class="summary-value">{{ state_number or ('Not configured' if lang == 'en' else 'غير مضبوطة') }}</div>
+  </div>
+  <div>
+    <div class="summary-label">{{ 'Registered Alliances' if lang == 'en' else 'تحالفات الولاية المسجلة' }}</div>
+    <div class="summary-value">{{ alliances|length }}</div>
+  </div>
+  {% if current_user and current_user.is_admin %}
+  <a class="btn btn-ghost" href="/dashboard">{{ 'Open Dashboard' if lang == 'en' else 'فتح لوحة التحكم' }}</a>
+  {% endif %}
+</div>
+
+<section class="lists-grid">
+  {% for card in cards %}
+  <a class="list-card" href="{{ card.href }}">
+    <div class="list-card-key">{{ loop.index }}</div>
+    <h2>{{ card.title }}</h2>
+    <p>{{ card.description }}</p>
+    <span class="list-card-cta">{{ 'Open List' if lang == 'en' else 'فتح القائمة' }}</span>
+  </a>
+  {% else %}
+  <div class="panel">
+    <h2>{{ 'No active lists' if lang == 'en' else 'لا توجد قوائم مفعلة' }}</h2>
+    <p>{{ 'Enable one or more lists from the dashboard first.' if lang == 'en' else 'قم بتفعيل قائمة أو أكثر من لوحة التحكم أولاً.' }}</p>
+  </div>
+  {% endfor %}
+</section>
+
+{% endblock %}

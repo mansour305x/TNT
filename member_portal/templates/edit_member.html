@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="portal-header">
+  <div>
+    <h1 class="portal-title">{{ 'Edit Member Record' if lang == 'en' else 'تعديل سجل العضو' }}</h1>
+    <p class="portal-sub">{{ 'Update member details and save changes.' if lang == 'en' else 'حدّث بيانات العضو ثم احفظ التغييرات.' }}</p>
+  </div>
+  <a class="btn btn-ghost" href="/members">{{ 'Back to Members' if lang == 'en' else 'العودة للأعضاء' }}</a>
+</div>
+
+<div class="registration-card">
+  <form method="post" action="/records/{{ record.id }}/edit" id="memberEditForm">
+
+    <div class="reg-section-label">{{ 'Basic Information' if lang == 'en' else 'المعلومات الأساسية' }}</div>
+    <div class="reg-basic-grid">
+      <label class="reg-field">
+        <span class="reg-label">{{ 'Player ID' if lang == 'en' else 'معرف اللاعب' }}</span>
+        <input type="text" name="player_id" required value="{{ record.member_uid }}" />
+      </label>
+      <label class="reg-field">
+        <span class="reg-label">{{ 'Current Name' if lang == 'en' else 'الاسم الحالي' }}</span>
+        <input type="text" name="current_name" required value="{{ record.member_name }}" />
+      </label>
+      <label class="reg-field">
+        <span class="reg-label">{{ 'Alliance' if lang == 'en' else 'التحالف' }}</span>
+        <input type="text" name="alliance" required value="{{ record.alliance }}" />
+      </label>
+      <label class="reg-field">
+        <span class="reg-label">{{ 'Rank' if lang == 'en' else 'الرتبة' }}</span>
+        <input type="text" name="rank" required value="{{ record.rank }}" />
+      </label>
+    </div>
+
+    {% if fields %}
+    <div class="reg-section-label">{{ 'Troop Tiers & Status' if lang == 'en' else 'مستويات القوات والحالة' }}</div>
+    <div class="reg-dynamic-strip">
+      {% for field in fields %}
+      <div class="reg-field-card">
+        <div class="reg-field-card-header">
+          <span class="reg-label">{{ field.label }}{% if field.is_required %}<span class="req-star"> *</span>{% endif %}</span>
+        </div>
+        <select name="field_{{ field.id }}" {% if field.is_required %}required{% endif %} class="reg-select">
+          <option value="">— {{ 'Select' if lang == 'en' else 'اختر' }} —</option>
+          {% for option in field.options %}
+          <option value="{{ option.value }}" {% if selected_by_field.get(field.id) == option.value %}selected{% endif %}>{{ option.value }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="reg-section-label">{{ 'Notes' if lang == 'en' else 'ملاحظات' }}</div>
+    <textarea name="notes" class="reg-notes" rows="3">{{ record.notes }}</textarea>
+
+    <div class="reg-actions">
+      <a class="btn btn-ghost" href="/members">{{ 'Cancel' if lang == 'en' else 'إلغاء' }}</a>
+      <button class="btn btn-primary reg-submit" type="submit">
+        {{ 'Save Changes' if lang == 'en' else 'حفظ التعديلات' }}
+      </button>
+    </div>
+
+  </form>
+</div>
+
+{% endblock %}

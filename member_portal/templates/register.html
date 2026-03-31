@@ -8,14 +8,18 @@
         <span class="tnt-logo-text">TNT</span>
       </div>
     </div>
-    <h1 class="tnt-logo-title">{{ 'TNT Alliance' if lang == 'en' else 'تحالف TNT' }}</h1>
-    <p class="tnt-logo-subtitle">{{ 'Member Transfer Portal' if lang == 'en' else 'بوابة نقل الأعضاء' }}</p>
+    <h1 class="tnt-logo-title">DANGER TNT</h1>
+    <p class="tnt-logo-subtitle">{{ 'Strategic Command Access' if lang == 'en' else 'وصول القيادة الاستراتيجية' }}</p>
     <div class="tnt-stars">★ ★ ★ ★ ★</div>
   </div>
 
   <div class="auth-panel-single panel">
     <h2 class="auth-panel-title">{{ 'Create Account' if lang == 'en' else 'إنشاء حساب' }}</h2>
     <form method="post" action="/register" class="stacked">
+      <label>
+        <span>{{ 'Email' if lang == 'en' else 'البريد الإلكتروني' }}</span>
+        <input type="email" name="email" autocomplete="email" required />
+      </label>
       <label>
         <span>{{ 'Username' if lang == 'en' else 'اسم المستخدم' }}</span>
         <input type="text" name="username" autocomplete="username" required />
@@ -26,12 +30,21 @@
       </label>
       <label>
         <span>{{ 'State / Province' if lang == 'en' else 'الولاية / المنطقة' }}</span>
-        <input type="text" name="state" placeholder="{{ 'e.g. Riyadh, Cairo…' if lang == 'en' else 'مثال: الرياض، القاهرة…' }}" />
+        <input type="text" name="state" />
       </label>
       <button class="btn btn-primary full-btn" type="submit">
-        {{ 'Create Account' if lang == 'en' else 'إنشاء الحساب' }}
+        {{ 'Create Account with Email' if lang == 'en' else 'إنشاء حساب عبر الإيميل' }}
       </button>
     </form>
+
+    <div class="social-auth">
+      <div class="social-auth-label">{{ 'Or register with' if lang == 'en' else 'أو التسجيل عبر' }}</div>
+      <div class="social-auth-actions">
+        <a class="btn btn-social" href="/oauth/google/start">Google</a>
+        <a class="btn btn-social" href="/oauth/discord/start">Discord</a>
+      </div>
+    </div>
+
     <p class="register-link-line">
       {{ 'Already have an account?' if lang == 'en' else 'لديك حساب بالفعل؟' }}
       <a href="/">{{ 'Sign In' if lang == 'en' else 'تسجيل الدخول' }}</a>

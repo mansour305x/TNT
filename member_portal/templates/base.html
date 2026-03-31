@@ -3,14 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap" rel="stylesheet" />
   <title>{{ title }}</title>
   <link rel="stylesheet" href="/static/styles.css" />
-  <script>
-    (function () {
-      var t = localStorage.getItem('tnt-theme') || 'light';
-      document.documentElement.setAttribute('data-theme', t);
-    })();
-  </script>
 </head>
 <body>
   <div class="page-bg" aria-hidden="true"></div>
@@ -19,37 +15,52 @@
     <a class="brand" href="{{ '/portal' if current_user else '/' }}">
       <span class="brand-badge">TNT</span>
       <span class="brand-text">
-        <strong>{{ 'TNT Alliance' if lang == 'en' else 'تحالف TNT' }}</strong>
-        <small>{{ 'Member Portal' if lang == 'en' else 'بوابة الأعضاء' }}</small>
+        <strong>{{ 'DANGER TNT' if lang == 'en' else 'DANGER TNT' }}</strong>
+        <small>{{ 'Elite Command' if lang == 'en' else 'القيادة الخاصة' }}</small>
       </span>
     </a>
 
     <nav class="nav-links">
       {% if current_user %}
-      <a class="nav-link" href="/portal">{{ 'Registration' if lang == 'en' else 'التسجيل' }}</a>
-      <a class="nav-link" href="/members">{{ 'Members' if lang == 'en' else 'الأعضاء' }}</a>
+      <a class="nav-link {% if request_path == '/portal' %}nav-link-active{% endif %}" href="/portal">{{ 'Lists' if lang == 'en' else 'القوائم' }}</a>
+      <a class="nav-link {% if request_path == '/members' %}nav-link-active{% endif %}" href="/members">{{ 'Members' if lang == 'en' else 'الأعضاء' }}</a>
       {% if current_user.is_admin %}
-      <a class="nav-link" href="/dashboard">{{ 'Dashboard' if lang == 'en' else 'لوحة التحكم' }}</a>
+      <a class="nav-link {% if request_path == '/dashboard' %}nav-link-active{% endif %}" href="/dashboard">{{ 'Dashboard' if lang == 'en' else 'لوحة التحكم' }}</a>
       {% endif %}
 
       <div class="profile-nav" id="profileNav">
         <button class="profile-trigger" onclick="toggleProfile()" type="button">
           <span class="profile-avatar-sm">{{ current_user.username[0] | upper }}</span>
-          <span class="profile-trigger-name">{{ current_user.username }}</span>
+          <span class="profile-trigger-name">{{ 'Settings' if lang == 'en' else 'الإعدادات' }}</span>
           <svg class="chevron-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg>
         </button>
         <div class="profile-dropdown">
+          <div class="profile-dropdown-title">{{ 'Account Settings' if lang == 'en' else 'إعدادات الحساب' }}</div>
           <div class="profile-info-block">
             <div class="profile-avatar-lg">{{ current_user.username[0] | upper }}</div>
             <div class="profile-info-text">
               <div class="profile-username">{{ current_user.username }}</div>
-              {% if current_user.state %}
-              <div class="profile-meta">📍 {{ current_user.state }}</div>
-              {% endif %}
-              <div class="profile-meta">{{ 'Since' if lang == 'en' else 'عضو منذ' }} {{ current_user.created_at[:10] }}</div>
               {% if current_user.is_admin %}
               <span class="profile-admin-badge">Admin</span>
               {% endif %}
+            </div>
+          </div>
+          <div class="settings-grid">
+            <div class="setting-row">
+              <span class="setting-label">{{ 'Username' if lang == 'en' else 'اسم المستخدم' }}</span>
+              <strong>{{ current_user.username }}</strong>
+            </div>
+            <div class="setting-row">
+              <span class="setting-label">{{ 'State' if lang == 'en' else 'الولاية' }}</span>
+              <strong>{{ current_user.state or ('Not set' if lang == 'en' else 'غير محددة') }}</strong>
+            </div>
+            <div class="setting-row">
+              <span class="setting-label">{{ 'Role' if lang == 'en' else 'الصلاحية' }}</span>
+              <strong>{{ ('Admin' if lang == 'en' else 'مسؤول') if current_user.is_admin else ('Member' if lang == 'en' else 'عضو') }}</strong>
+            </div>
+            <div class="setting-row">
+              <span class="setting-label">{{ 'Joined' if lang == 'en' else 'تاريخ الانضمام' }}</span>
+              <strong>{{ current_user.created_at[:10] }}</strong>
             </div>
           </div>
           <div class="profile-dropdown-footer">
@@ -70,9 +81,6 @@
         </select>
       </form>
 
-      <button class="theme-toggle-btn" id="themeToggle" onclick="toggleTheme()" type="button" title="{{ 'Toggle theme' if lang == 'en' else 'تغيير المظهر' }}">
-        <span id="themeIcon">🌙</span>
-      </button>
     </nav>
   </header>
 
@@ -85,21 +93,6 @@
   </main>
 
   <script>
-    (function () {
-      var t = localStorage.getItem('tnt-theme') || 'light';
-      var icon = document.getElementById('themeIcon');
-      if (icon) icon.textContent = t === 'dark' ? '☀️' : '🌙';
-    })();
-
-    function toggleTheme() {
-      var current = document.documentElement.getAttribute('data-theme') || 'light';
-      var next = current === 'dark' ? 'light' : 'dark';
-      document.documentElement.setAttribute('data-theme', next);
-      localStorage.setItem('tnt-theme', next);
-      var icon = document.getElementById('themeIcon');
-      if (icon) icon.textContent = next === 'dark' ? '☀️' : '🌙';
-    }
-
     function toggleProfile() {
       var nav = document.getElementById('profileNav');
       if (nav) nav.classList.toggle('open');
