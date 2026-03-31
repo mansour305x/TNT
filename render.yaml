@@ -5,6 +5,7 @@ services:
     plan: free
     buildCommand: pip install -r requirements-web.txt
     startCommand: python member_portal/app.py
+    healthCheckPath: /healthz
     autoDeploy: true
     envVars:
       - key: PORTAL_SECRET_KEY

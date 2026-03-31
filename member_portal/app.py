@@ -2306,6 +2306,10 @@ async def export_transfers_csv(request: web.Request) -> web.Response:
     )
 
 
+async def healthz(request: web.Request) -> web.Response:
+    return web.Response(text="ok", content_type="text/plain")
+
+
 def build_app() -> web.Application:
     init_db()
 
@@ -2316,6 +2320,7 @@ def build_app() -> web.Application:
     )
 
     app.router.add_static("/static/", path=str(STATIC_DIR), name="static")
+    app.router.add_get("/healthz", healthz)
 
     app.router.add_get("/", auth_page)
     app.router.add_get("/register-page", register_page)
