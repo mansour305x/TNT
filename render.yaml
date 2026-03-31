@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: tnt-portal
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements-web.txt
+    startCommand: python member_portal/app.py
+    autoDeploy: true
+    envVars:
+      - key: PORTAL_SECRET_KEY
+        generateValue: true
+      - key: PORTAL_ADMIN_PASSWORD
+        value: admin123
+      - key: PORTAL_FULL_ADMIN_USERNAME
+        value: mn9@hotmail.com
+      - key: PORTAL_FULL_ADMIN_PASSWORD
+        value: DANGER
