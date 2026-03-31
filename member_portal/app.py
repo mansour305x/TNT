@@ -6,6 +6,7 @@ import sqlite3
 import time
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 from aiohttp import web
 from jinja2 import Environment, FileSystemLoader, select_autoescape
@@ -16,6 +17,7 @@ TEMPLATES_DIR = BASE_DIR / "templates"
 STATIC_DIR = BASE_DIR / "static"
 
 SESSION_COOKIE = "member_portal_session"
+LANG_COOKIE = "portal_lang"
 SESSION_TTL_SECONDS = 60 * 60 * 24 * 7
 SECRET_KEY = os.getenv("PORTAL_SECRET_KEY", "change-me-in-production").encode("utf-8")
 
@@ -178,6 +180,13 @@ def get_current_user(request: web.Request) -> dict[str, Any] | None:
     return dict(row)
 
 
+def get_lang(request: web.Request) -> str:
+    lang = str(request.cookies.get(LANG_COOKIE, "ar")).lower()
+    if lang not in {"ar", "en"}:
+        return "ar"
+    return lang
+
+
 def flash_response(location: str, message: str, level: str = "info") -> web.Response:
     resp = web.HTTPFound(location=location)
     safe_message = message.replace("|", " ")
@@ -197,6 +206,7 @@ def render_template(request: web.Request, template_name: str, context: dict[str,
     env: Environment = request.app["jinja_env"]
     context["current_user"] = get_current_user(request)
     context["flash"] = pop_flash(request)
+    context["lang"] = get_lang(request)
     html = env.get_template(template_name).render(**context)
     response = web.Response(text=html, content_type="text/html")
     if context["flash"]:
@@ -228,7 +238,23 @@ def fetch_fields_and_options(conn: sqlite3.Connection) -> list[dict[str, Any]]:
     return result
 
 
-async def index(request: web.Request) -> web.Response:
+async def auth_page(request: web.Request) -> web.Response:
+    if get_current_user(request):
+        raise web.HTTPFound(location="/portal")
+    return render_template(
+        request,
+        "auth.html",
+        {
+            "title": "TNT Alliance | Login",
+        },
+    )
+
+
+async def portal_page(request: web.Request) -> web.Response:
+    user = get_current_user(request)
+    if not user:
+        return flash_response("/", "سجل الدخول أولاً", "error")
+
     with get_db() as conn:
         fields = fetch_fields_and_options(conn)
         records = conn.execute(
@@ -241,9 +267,6 @@ async def index(request: web.Request) -> web.Response:
             """
         ).fetchall()
 
-    records_list = [dict(r) for r in records]
-
-    with get_db() as conn:
         values = conn.execute(
             """
             SELECT v.record_id, f.label, v.option_value
@@ -253,6 +276,7 @@ async def index(request: web.Request) -> web.Response:
             """
         ).fetchall()
 
+    records_list = [dict(r) for r in records]
     values_by_record: dict[int, list[dict[str, str]]] = {}
     for row in values:
         values_by_record.setdefault(row["record_id"], []).append(
@@ -266,11 +290,29 @@ async def index(request: web.Request) -> web.Response:
         request,
         "index.html",
         {
-            "title": "Member Portal",
+            "title": "TNT Alliance | Portal",
             "fields": fields,
             "records": records_list,
         },
     )
+
+
+async def set_language(request: web.Request) -> web.StreamResponse:
+    data = await request.post()
+    selected_lang = str(data.get("lang", "ar")).strip().lower()
+    next_path = str(data.get("next", "/")).strip() or "/"
+
+    if selected_lang not in {"ar", "en", "external"}:
+        selected_lang = "ar"
+
+    if selected_lang == "external":
+        target_lang = str(data.get("external_lang", "fr")).strip().lower()
+        target_url = f"https://translate.google.com/translate?sl=auto&tl={quote(target_lang)}&u={quote(next_path, safe='/:?&=%')}"
+        raise web.HTTPFound(location=target_url)
+
+    resp = web.HTTPFound(location=next_path)
+    resp.set_cookie(LANG_COOKIE, selected_lang, max_age=31536000, samesite="Lax")
+    return resp
 
 
 async def register_user(request: web.Request) -> web.StreamResponse:
@@ -279,7 +321,7 @@ async def register_user(request: web.Request) -> web.StreamResponse:
     password = str(data.get("password", "")).strip()
 
     if len(username) < 3 or len(password) < 6:
-        return flash_response("/", "Username >= 3 chars and password >= 6 chars", "error")
+        return flash_response("/", "اسم المستخدم 3 أحرف وكلمة المرور 6 أحرف على الأقل", "error")
 
     with get_db() as conn:
         try:
@@ -288,9 +330,9 @@ async def register_user(request: web.Request) -> web.StreamResponse:
                 (username, hash_password(password)),
             )
         except sqlite3.IntegrityError:
-            return flash_response("/", "Username already exists", "error")
+            return flash_response("/", "اسم المستخدم مستخدم مسبقًا", "error")
 
-    return flash_response("/", "Account created. You can login now.", "success")
+    return flash_response("/", "تم إنشاء الحساب، سجل دخولك الآن", "success")
 
 
 async def login_user(request: web.Request) -> web.StreamResponse:
@@ -305,9 +347,9 @@ async def login_user(request: web.Request) -> web.StreamResponse:
         ).fetchone()
 
     if not user or not verify_password(password, user["password_hash"]):
-        return flash_response("/", "Invalid username or password", "error")
+        return flash_response("/", "بيانات الدخول غير صحيحة", "error")
 
-    resp = web.HTTPFound(location="/")
+    resp = web.HTTPFound(location="/portal")
     resp.set_cookie(
         SESSION_COOKIE,
         issue_session_cookie(user["id"]),
@@ -315,26 +357,28 @@ async def login_user(request: web.Request) -> web.StreamResponse:
         httponly=True,
         samesite="Lax",
     )
-    resp.set_cookie("flash", "success|Logged in successfully", max_age=12, httponly=True, samesite="Lax")
+    resp.set_cookie("flash", "success|تم تسجيل الدخول", max_age=12, httponly=True, samesite="Lax")
     return resp
 
 
 async def logout_user(request: web.Request) -> web.StreamResponse:
     resp = web.HTTPFound(location="/")
     resp.del_cookie(SESSION_COOKIE)
-    resp.set_cookie("flash", "info|Logged out", max_age=12, httponly=True, samesite="Lax")
+    resp.set_cookie("flash", "info|تم تسجيل الخروج", max_age=12, httponly=True, samesite="Lax")
     return resp
 
 
 async def create_record(request: web.Request) -> web.StreamResponse:
+    user = get_current_user(request)
+    if not user:
+        return flash_response("/", "سجل الدخول أولاً", "error")
+
     data = await request.post()
     member_name = str(data.get("member_name", "")).strip()
     member_uid = str(data.get("member_uid", "")).strip()
 
     if not member_name or not member_uid:
-        return flash_response("/", "Member name and ID are required", "error")
-
-    user = get_current_user(request)
+        return flash_response("/portal", "اسم العضو والـ ID مطلوبان", "error")
 
     with get_db() as conn:
         fields = fetch_fields_and_options(conn)
@@ -344,11 +388,11 @@ async def create_record(request: web.Request) -> web.StreamResponse:
             if f["is_required"] and not str(data.get(f"field_{f['id']}", "")).strip()
         ]
         if missing_required:
-            return flash_response("/", f"Required dropdowns missing: {', '.join(missing_required)}", "error")
+            return flash_response("/portal", f"حقول مطلوبة ناقصة: {', '.join(missing_required)}", "error")
 
         cur = conn.execute(
             "INSERT INTO member_records (member_name, member_uid, created_by) VALUES (?, ?, ?)",
-            (member_name, member_uid, user["id"] if user else None),
+            (member_name, member_uid, user["id"]),
         )
         record_id = int(cur.lastrowid)
 
@@ -360,13 +404,13 @@ async def create_record(request: web.Request) -> web.StreamResponse:
                     (record_id, field["id"], selected_value),
                 )
 
-    return flash_response("/", "Member record created", "success")
+    return flash_response("/portal", "تم حفظ سجل العضو", "success")
 
 
 async def dashboard(request: web.Request) -> web.Response:
     user = get_current_user(request)
     if not user or not user["is_admin"]:
-        return flash_response("/", "Admin access required", "error")
+        return flash_response("/portal", "صلاحية الأدمن مطلوبة", "error")
 
     with get_db() as conn:
         fields = fetch_fields_and_options(conn)
@@ -378,7 +422,7 @@ async def dashboard(request: web.Request) -> web.Response:
         request,
         "dashboard.html",
         {
-            "title": "Control Panel",
+            "title": "TNT Alliance | Admin",
             "fields": fields,
             "users": [dict(u) for u in users],
         },
@@ -388,7 +432,7 @@ async def dashboard(request: web.Request) -> web.Response:
 async def add_field(request: web.Request) -> web.StreamResponse:
     user = get_current_user(request)
     if not user or not user["is_admin"]:
-        return flash_response("/", "Admin access required", "error")
+        return flash_response("/portal", "صلاحية الأدمن مطلوبة", "error")
 
     data = await request.post()
     label = str(data.get("label", "")).strip()
@@ -397,7 +441,7 @@ async def add_field(request: web.Request) -> web.StreamResponse:
     is_required = 1 if str(data.get("is_required", "")).strip() == "on" else 0
 
     if not label or not field_key:
-        return flash_response("/dashboard", "Label and key are required", "error")
+        return flash_response("/dashboard", "عنوان ومفتاح الحقل مطلوبان", "error")
 
     with get_db() as conn:
         try:
@@ -409,28 +453,28 @@ async def add_field(request: web.Request) -> web.StreamResponse:
                 (field_key, label, sort_order, is_required, user["id"]),
             )
         except sqlite3.IntegrityError:
-            return flash_response("/dashboard", "Field key already exists", "error")
+            return flash_response("/dashboard", "مفتاح الحقل مستخدم", "error")
 
-    return flash_response("/dashboard", "Dropdown field added", "success")
+    return flash_response("/dashboard", "تمت إضافة الحقل", "success")
 
 
 async def delete_field(request: web.Request) -> web.StreamResponse:
     user = get_current_user(request)
     if not user or not user["is_admin"]:
-        return flash_response("/", "Admin access required", "error")
+        return flash_response("/portal", "صلاحية الأدمن مطلوبة", "error")
 
     field_id = int(request.match_info["field_id"])
 
     with get_db() as conn:
         conn.execute("DELETE FROM dropdown_fields WHERE id = ?", (field_id,))
 
-    return flash_response("/dashboard", "Field deleted", "info")
+    return flash_response("/dashboard", "تم حذف الحقل", "info")
 
 
 async def add_option_admin(request: web.Request) -> web.StreamResponse:
     user = get_current_user(request)
     if not user or not user["is_admin"]:
-        return flash_response("/", "Admin access required", "error")
+        return flash_response("/portal", "صلاحية الأدمن مطلوبة", "error")
 
     data = await request.post()
     field_id = int(str(data.get("field_id", "0")).strip() or "0")
@@ -438,7 +482,7 @@ async def add_option_admin(request: web.Request) -> web.StreamResponse:
     sort_order = int(str(data.get("sort_order", "100")).strip() or "100")
 
     if not field_id or not value:
-        return flash_response("/dashboard", "Field and value are required", "error")
+        return flash_response("/dashboard", "اختر الحقل واكتب الخيار", "error")
 
     with get_db() as conn:
         try:
@@ -447,27 +491,27 @@ async def add_option_admin(request: web.Request) -> web.StreamResponse:
                 (field_id, value, sort_order, user["id"]),
             )
         except sqlite3.IntegrityError:
-            return flash_response("/dashboard", "Option already exists", "error")
+            return flash_response("/dashboard", "الخيار موجود مسبقًا", "error")
 
-    return flash_response("/dashboard", "Option added", "success")
+    return flash_response("/dashboard", "تمت إضافة الخيار", "success")
 
 
 async def contribute_option(request: web.Request) -> web.StreamResponse:
     user = get_current_user(request)
     if not user:
-        return flash_response("/", "Login required to add options", "error")
+        return flash_response("/", "سجل الدخول لإضافة خيار", "error")
 
     data = await request.post()
     field_id = int(str(data.get("field_id", "0")).strip() or "0")
     value = str(data.get("value", "")).strip()
 
     if not field_id or len(value) < 2:
-        return flash_response("/", "Choose field and write valid option", "error")
+        return flash_response("/portal", "اكتب خيارًا صالحًا", "error")
 
     with get_db() as conn:
         exists = conn.execute("SELECT 1 FROM dropdown_fields WHERE id = ?", (field_id,)).fetchone()
         if not exists:
-            return flash_response("/", "Dropdown field not found", "error")
+            return flash_response("/portal", "الحقل غير موجود", "error")
 
         try:
             conn.execute(
@@ -475,9 +519,9 @@ async def contribute_option(request: web.Request) -> web.StreamResponse:
                 (field_id, value, user["id"]),
             )
         except sqlite3.IntegrityError:
-            return flash_response("/", "Option already exists", "error")
+            return flash_response("/portal", "الخيار موجود مسبقًا", "error")
 
-    return flash_response("/", "Option submitted successfully", "success")
+    return flash_response("/portal", "تمت إضافة الخيار", "success")
 
 
 def build_app() -> web.Application:
@@ -490,19 +534,22 @@ def build_app() -> web.Application:
     )
 
     app.router.add_static("/static/", path=str(STATIC_DIR), name="static")
-    app.router.add_get("/", index)
+
+    app.router.add_get("/", auth_page)
+    app.router.add_get("/portal", portal_page)
+
     app.router.add_post("/register", register_user)
     app.router.add_post("/login", login_user)
     app.router.add_get("/logout", logout_user)
+    app.router.add_post("/set-language", set_language)
 
     app.router.add_post("/records/create", create_record)
+    app.router.add_post("/options/contribute", contribute_option)
 
     app.router.add_get("/dashboard", dashboard)
     app.router.add_post("/dashboard/fields", add_field)
     app.router.add_post("/dashboard/fields/{field_id}/delete", delete_field)
     app.router.add_post("/dashboard/options", add_option_admin)
-
-    app.router.add_post("/options/contribute", contribute_option)
 
     return app
 

@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="auth-wrap">
+  <div class="hero-card">
+    <h1>بوابة تحالف TNT</h1>
+    <p>سجل الدخول أو أنشئ حسابًا جديدًا للمتابعة إلى تسجيل الأعضاء.</p>
+  </div>
+
+  <div class="auth-grid">
+    <section class="panel">
+      <h2>تسجيل الدخول</h2>
+      <form method="post" action="/login" class="stacked">
+        <label>
+          <span>اسم المستخدم</span>
+          <input type="text" name="username" required />
+        </label>
+        <label>
+          <span>كلمة المرور</span>
+          <input type="password" name="password" required />
+        </label>
+        <button class="btn btn-primary" type="submit">دخول</button>
+      </form>
+    </section>
+
+    <section class="panel">
+      <h2>إنشاء حساب</h2>
+      <form method="post" action="/register" class="stacked">
+        <label>
+          <span>اسم المستخدم</span>
+          <input type="text" name="username" required />
+        </label>
+        <label>
+          <span>كلمة المرور</span>
+          <input type="password" name="password" required />
+        </label>
+        <button class="btn" type="submit">تسجيل</button>
+      </form>
+    </section>
+  </div>
+</section>
+{% endblock %}

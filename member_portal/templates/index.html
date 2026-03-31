@@ -1,113 +1,89 @@
 {% extends "base.html" %}
 {% block content %}
-<section class="hero">
-  <h1>Professional Member Registration</h1>
-  <p>Fixed fields for member name and member ID, plus dynamic dropdowns managed from control panel.</p>
+<section class="hero-card">
+  <h1>تسجيل أعضاء التحالف</h1>
+  <p>كل شيء داخل الصفحة: إدخال بيانات العضو، اختيار القيم، وإضافة خيارات جديدة بسرعة.</p>
 </section>
 
 <div class="layout">
   <section class="panel">
     <h2>Create Member Record</h2>
-    <form method="post" action="/records/create" class="form-grid">
+    <form method="post" action="/records/create" class="stacked">
       <label>
-        <span>Member Name</span>
-        <input type="text" name="member_name" placeholder="Example: Falcon-77" required />
+        <span>اسم العضو</span>
+        <input type="text" name="member_name" required />
       </label>
+
       <label>
-        <span>Member ID</span>
-        <input type="text" name="member_uid" placeholder="Example: 10928374" required />
+        <span>ID العضو</span>
+        <input type="text" name="member_uid" required />
       </label>
 
       {% for field in fields %}
-      <label>
-        <span>{{ field.label }}{% if field.is_required %} *{% endif %}</span>
-        <select name="field_{{ field.id }}" {% if field.is_required %}required{% endif %}>
-          <option value="">Select an option</option>
-          {% for option in field.options %}
-          <option value="{{ option.value }}">{{ option.value }}</option>
-          {% endfor %}
-        </select>
-      </label>
+      <div class="field-block">
+        <label>
+          <span>{{ field.label }}{% if field.is_required %} *{% endif %}</span>
+          <select name="field_{{ field.id }}" {% if field.is_required %}required{% endif %}>
+            <option value="">اختر</option>
+            {% for option in field.options %}
+            <option value="{{ option.value }}">{{ option.value }}</option>
+            {% endfor %}
+          </select>
+        </label>
+
+        <div class="inline-add">
+          <input type="text" name="value" form="add-option-{{ field.id }}" placeholder="أضف خيار جديد لهذا الحقل" required />
+          <button class="btn" type="submit" form="add-option-{{ field.id }}">إضافة</button>
+        </div>
+      </div>
       {% endfor %}
 
-      <button class="btn btn-primary" type="submit">Save Member</button>
+      <button class="btn btn-primary" type="submit">حفظ سجل العضو</button>
     </form>
+
+    {% for field in fields %}
+    <form id="add-option-{{ field.id }}" method="post" action="/options/contribute" class="hidden-submit-form">
+      <input type="hidden" name="field_id" value="{{ field.id }}" />
+    </form>
+    {% endfor %}
   </section>
 
-  <section class="panel auth-panel">
-    {% if not current_user %}
-    <h2>Login / Register</h2>
-    <form method="post" action="/login" class="stacked">
-      <input type="text" name="username" placeholder="Username" required />
-      <input type="password" name="password" placeholder="Password" required />
-      <button class="btn btn-primary" type="submit">Login</button>
-    </form>
-
-    <hr />
-
-    <form method="post" action="/register" class="stacked">
-      <input type="text" name="username" placeholder="New username" required />
-      <input type="password" name="password" placeholder="New password" required />
-      <button class="btn" type="submit">Create Account</button>
-    </form>
-    {% else %}
-    <h2>Contribute Dropdown Option</h2>
-    <p>Any registered user can add new option values.</p>
-    <form method="post" action="/options/contribute" class="stacked">
-      <select name="field_id" required>
-        <option value="">Choose Dropdown</option>
-        {% for field in fields %}
-        <option value="{{ field.id }}">{{ field.label }}</option>
-        {% endfor %}
-      </select>
-      <input type="text" name="value" placeholder="New option value" required />
-      <button class="btn" type="submit">Submit Option</button>
-    </form>
-    {% endif %}
-
-    <div class="notice">
-      <h3>Default Admin</h3>
-      <p>username: <strong>admin</strong></p>
-      <p>password: <strong>admin123</strong> (change with PORTAL_ADMIN_PASSWORD)</p>
+  <section class="panel table-panel">
+    <h2>آخر السجلات</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>الاسم</th>
+            <th>UID</th>
+            <th>الاختيارات</th>
+            <th>بواسطة</th>
+            <th>الوقت</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for rec in records %}
+          <tr>
+            <td>{{ rec.id }}</td>
+            <td>{{ rec.member_name }}</td>
+            <td>{{ rec.member_uid }}</td>
+            <td>
+              {% if rec.dynamic_values %}
+                {% for item in rec.dynamic_values %}
+                <div>{{ item.label }}: {{ item.value }}</div>
+                {% endfor %}
+              {% else %}
+                -
+              {% endif %}
+            </td>
+            <td>{{ rec.username or 'system' }}</td>
+            <td>{{ rec.created_at }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
     </div>
   </section>
 </div>
-
-<section class="panel table-panel">
-  <h2>Latest Records</h2>
-  <div class="table-wrap">
-    <table>
-      <thead>
-        <tr>
-          <th>ID</th>
-          <th>Member Name</th>
-          <th>Member UID</th>
-          <th>Selections</th>
-          <th>Created By</th>
-          <th>Created At</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for rec in records %}
-        <tr>
-          <td>{{ rec.id }}</td>
-          <td>{{ rec.member_name }}</td>
-          <td>{{ rec.member_uid }}</td>
-          <td>
-            {% if rec.dynamic_values %}
-              {% for item in rec.dynamic_values %}
-              <div>{{ item.label }}: {{ item.value }}</div>
-              {% endfor %}
-            {% else %}
-              -
-            {% endif %}
-          </td>
-          <td>{{ rec.username or 'system' }}</td>
-          <td>{{ rec.created_at }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-</section>
 {% endblock %}
