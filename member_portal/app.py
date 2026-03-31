@@ -61,6 +61,8 @@ TRANSLATIONS = {
         "invalid_email": "Please enter a valid email",
         "email_exists": "Email already exists",
         "email_or_username_required": "Enter username or email",
+        "username_email_conflict": "Username cannot be an existing email",
+        "email_username_conflict": "Email cannot match an existing username",
         "login_success": "Signed in successfully",
         "logout_success": "Signed out successfully",
         "oauth_unavailable": "This login provider is not configured yet",
@@ -139,6 +141,8 @@ TRANSLATIONS = {
         "invalid_email": "يرجى إدخال بريد إلكتروني صحيح",
         "email_exists": "البريد الإلكتروني مستخدم مسبقًا",
         "email_or_username_required": "أدخل اسم المستخدم أو البريد الإلكتروني",
+        "username_email_conflict": "اسم المستخدم لا يمكن أن يطابق بريدًا إلكترونيًا موجودًا",
+        "email_username_conflict": "البريد الإلكتروني لا يمكن أن يطابق اسم مستخدم موجودًا",
         "login_success": "تم تسجيل الدخول",
         "logout_success": "تم تسجيل الخروج",
         "oauth_unavailable": "موفر تسجيل الدخول هذا غير مُعد بعد",
@@ -546,6 +550,20 @@ def normalize_email(raw_email: str) -> str:
 def is_valid_email(raw_email: str) -> bool:
     email = normalize_email(raw_email)
     return "@" in email and "." in email.split("@")[-1] and len(email) >= 6
+
+
+def get_user_for_login(conn: sqlite3.Connection, login_id: str) -> sqlite3.Row | None:
+    # Use deterministic lookup to avoid accidental cross-account matches.
+    # If input looks like email, authenticate by email only; otherwise by username only.
+    if "@" in login_id:
+        return conn.execute(
+            "SELECT id, password_hash FROM users WHERE email = ? LIMIT 1",
+            (normalize_email(login_id),),
+        ).fetchone()
+    return conn.execute(
+        "SELECT id, password_hash FROM users WHERE username = ? LIMIT 1",
+        (login_id,),
+    ).fetchone()
 
 
 def is_full_admin_username(username: str) -> bool:
@@ -1323,6 +1341,20 @@ async def register_user(request: web.Request) -> web.StreamResponse:
         return flash_response("/register-page", translate_request(request, "invalid_email"), "error")
 
     with get_db() as conn:
+        username_conflicts_email = conn.execute(
+            "SELECT 1 FROM users WHERE email = ? LIMIT 1",
+            (normalize_email(username),),
+        ).fetchone()
+        if username_conflicts_email:
+            return flash_response("/register-page", translate_request(request, "username_email_conflict"), "error")
+
+        email_conflicts_username = conn.execute(
+            "SELECT 1 FROM users WHERE username = ? LIMIT 1",
+            (email,),
+        ).fetchone()
+        if email_conflicts_username:
+            return flash_response("/register-page", translate_request(request, "email_username_conflict"), "error")
+
         email_exists = conn.execute("SELECT 1 FROM users WHERE email = ? LIMIT 1", (email,)).fetchone()
         if email_exists:
             return flash_response("/register-page", translate_request(request, "email_exists"), "error")
@@ -1346,10 +1378,7 @@ async def login_user(request: web.Request) -> web.StreamResponse:
         return flash_response("/", translate_request(request, "email_or_username_required"), "error")
 
     with get_db() as conn:
-        user = conn.execute(
-            "SELECT id, password_hash FROM users WHERE username = ? OR email = ? LIMIT 1",
-            (login_id, normalize_email(login_id)),
-        ).fetchone()
+        user = get_user_for_login(conn, login_id)
 
     if not user or not verify_password(password, user["password_hash"]):
         return flash_response("/", translate_request(request, "invalid_login"), "error")
@@ -1393,6 +1422,13 @@ async def update_profile(request: web.Request) -> web.StreamResponse:
         return flash_response("/profile", translate_request(request, "invalid_email"), "error")
 
     with get_db() as conn:
+        email_conflicts_username = conn.execute(
+            "SELECT 1 FROM users WHERE username = ? AND id != ? LIMIT 1",
+            (email, user["id"]),
+        ).fetchone()
+        if email_conflicts_username:
+            return flash_response("/profile", translate_request(request, "email_username_conflict"), "error")
+
         email_exists = conn.execute(
             "SELECT 1 FROM users WHERE email = ? AND id != ? LIMIT 1",
             (email, user["id"]),
