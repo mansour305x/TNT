@@ -25,10 +25,14 @@
         {% if current_user.email_verified %}
           {{ 'Email status: Verified' if lang == 'en' else 'حالة البريد: موثق' }}
         {% else %}
-          {{ 'Email status: Not verified yet. Your email is saved, and you can verify it after the code is sent.' if lang == 'en' else 'حالة البريد: غير موثق بعد. تم حفظ البريد ويمكنك توثيقه بعد إرسال الرمز.' }}
+          {% if smtp_configured %}
+            {{ 'Email status: Not verified yet. Save the email and then enter the code after it is sent.' if lang == 'en' else 'حالة البريد: غير موثق بعد. احفظ البريد ثم أدخل الرمز بعد إرساله.' }}
+          {% else %}
+            {{ 'Email status: Not verified yet. Your email will still be saved even if the mail service is not configured.' if lang == 'en' else 'حالة البريد: غير موثق بعد. سيتم حفظ البريد حتى لو لم يتم ضبط خدمة البريد.' }}
+          {% endif %}
         {% endif %}
       </p>
-      {% if not current_user.email_verified and current_user.email %}
+      {% if not current_user.email_verified and current_user.email and has_pending_email_verification %}
       <a class="text-link" href="/profile/verify-email">{{ 'Enter verification code' if lang == 'en' else 'إدخال رمز التحقق' }}</a>
       {% endif %}
       <label>

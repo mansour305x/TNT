@@ -893,6 +893,11 @@ def get_smtp_config() -> dict[str, Any]:
     }
 
 
+def is_smtp_configured() -> bool:
+    cfg = get_smtp_config()
+    return bool(cfg["host"] and cfg["user"] and cfg["password"])
+
+
 def fetch_fields_and_options(conn: sqlite3.Connection) -> list[dict[str, Any]]:
     fields = conn.execute(
         "SELECT id, field_key, label, sort_order, is_required FROM dropdown_fields ORDER BY sort_order, id"
@@ -1198,11 +1203,24 @@ async def profile_page(request: web.Request) -> web.Response:
     if not user:
         return flash_response("/", translate_request(request, "login_required"), "error")
 
+    with get_db() as conn:
+        pending_verification = conn.execute(
+            """
+            SELECT 1
+            FROM email_verifications
+            WHERE user_id = ? AND used_at IS NULL AND expires_at >= ?
+            LIMIT 1
+            """,
+            (user["id"], int(time.time())),
+        ).fetchone()
+
     return render_template(
         request,
         "profile.html",
         {
             "title": translate_request(request, "profile_title"),
+            "has_pending_email_verification": bool(pending_verification),
+            "smtp_configured": is_smtp_configured(),
         },
     )
 
@@ -1340,6 +1358,20 @@ async def update_profile(request: web.Request) -> web.StreamResponse:
         if email == current_email:
             return flash_response("/profile", translate_request(request, "profile_saved"), "success")
 
+        smtp_ready = is_smtp_configured()
+
+        conn.execute(
+            "UPDATE email_verifications SET used_at = ? WHERE user_id = ? AND used_at IS NULL",
+            (int(time.time()), user["id"]),
+        )
+
+        if not smtp_ready:
+            conn.execute(
+                "UPDATE users SET email = ?, email_verified = 0 WHERE id = ?",
+                (email, user["id"]),
+            )
+            return flash_response("/profile", translate_request(request, "email_saved_unverified"), "info")
+
         verify_code = f"{secrets.randbelow(1000000):06d}"
         token_hash = hash_reset_token(verify_code)
         expires_at = int(time.time()) + EMAIL_VERIFY_TOKEN_TTL_SECONDS
@@ -1347,11 +1379,6 @@ async def update_profile(request: web.Request) -> web.StreamResponse:
         conn.execute(
             "UPDATE users SET email = ?, email_verified = 0 WHERE id = ?",
             (email, user["id"]),
-        )
-
-        conn.execute(
-            "UPDATE email_verifications SET used_at = ? WHERE user_id = ? AND used_at IS NULL",
-            (int(time.time()), user["id"]),
         )
         conn.execute(
             "INSERT INTO email_verifications (user_id, new_email, token_hash, expires_at) VALUES (?, ?, ?, ?)",
@@ -2144,6 +2171,9 @@ async def resend_email_verification_otp(request: web.Request) -> web.StreamRespo
     user = get_current_user(request)
     if not user:
         return flash_response("/", translate_request(request, "login_required"), "error")
+
+    if not is_smtp_configured():
+        return flash_response("/profile", translate_request(request, "email_saved_unverified"), "info")
 
     with get_db() as conn:
         pending = conn.execute(
