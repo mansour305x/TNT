@@ -777,68 +777,78 @@ def upsert_oauth_user(
     return user_id
 
 
-def send_password_reset_email(target_email: str, reset_link: str) -> bool:
+def send_smtp_message(subject: str, target_email: str, body: str) -> bool:
     cfg = get_smtp_config()
     smtp_host = cfg["host"]
     smtp_port = cfg["port"]
     smtp_user = cfg["user"]
     smtp_password = cfg["password"]
-    smtp_from = cfg["from"]
+    smtp_from = cfg["from"] or smtp_user
 
-    if not all([smtp_host, smtp_user, smtp_password, smtp_from]):
+    # Debug: Print configuration status
+    print(f"[SMTP DEBUG] host={bool(smtp_host)}, port={smtp_port}, user={bool(smtp_user)}, pass={bool(smtp_password)}, from={bool(smtp_from)}", flush=True)
+    print(f"[SMTP DEBUG] Full config: {repr(cfg)}", flush=True)
+
+    if not smtp_host:
+        print("[SMTP ERROR] Missing SMTP_HOST", flush=True)
+        return False
+    if not smtp_user:
+        print("[SMTP ERROR] Missing SMTP_USER", flush=True)
+        return False
+    if not smtp_password:
+        print("[SMTP ERROR] Missing SMTP_PASSWORD", flush=True)
+        return False
+    if not smtp_from:
+        print("[SMTP ERROR] Missing SMTP_FROM", flush=True)
         return False
 
     msg = EmailMessage()
-    msg["Subject"] = "TNT Portal Password Reset"
+    msg["Subject"] = subject
     msg["From"] = smtp_from
     msg["To"] = target_email
-    msg.set_content(
-        "Use this link to reset your password:\n"
-        f"{reset_link}\n\n"
-        "If you did not request this, ignore this email."
-    )
+    msg.set_content(body)
 
     try:
-        with smtplib.SMTP(smtp_host, smtp_port, timeout=15) as smtp:
-            smtp.starttls()
-            smtp.login(smtp_user, smtp_password)
-            smtp.send_message(msg)
+        print(f"[SMTP] Attempting to send to {target_email} via {smtp_host}:{smtp_port}", flush=True)
+        # Port 465 typically requires implicit SSL, while 587 uses STARTTLS.
+        if int(smtp_port) == 465:
+            with smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=15) as smtp:
+                smtp.login(smtp_user, smtp_password)
+                smtp.send_message(msg)
+        else:
+            with smtplib.SMTP(smtp_host, smtp_port, timeout=15) as smtp:
+                smtp.starttls()
+                smtp.login(smtp_user, smtp_password)
+                smtp.send_message(msg)
+        print(f"[SMTP] Message sent successfully to {target_email}", flush=True)
         return True
     except Exception as exc:
-        print(f"[SMTP] password reset send failed: {exc}", flush=True)
+        print(f"[SMTP] send failed to {target_email}: {type(exc).__name__}: {exc}", flush=True)
         return False
+
+
+def send_password_reset_email(target_email: str, reset_link: str) -> bool:
+    return send_smtp_message(
+        subject="TNT Portal Password Reset",
+        target_email=target_email,
+        body=(
+            "Use this link to reset your password:\n"
+            f"{reset_link}\n\n"
+            "If you did not request this, ignore this email."
+        ),
+    )
 
 
 def send_email_verification_email(target_email: str, verify_code: str) -> bool:
-    cfg = get_smtp_config()
-    smtp_host = cfg["host"]
-    smtp_port = cfg["port"]
-    smtp_user = cfg["user"]
-    smtp_password = cfg["password"]
-    smtp_from = cfg["from"]
-
-    if not all([smtp_host, smtp_user, smtp_password, smtp_from]):
-        return False
-
-    msg = EmailMessage()
-    msg["Subject"] = "TNT Portal Email Verification"
-    msg["From"] = smtp_from
-    msg["To"] = target_email
-    msg.set_content(
-        "Use this verification code to confirm your email:\n"
-        f"{verify_code}\n\n"
-        "This code expires in 60 minutes. If you did not request this, ignore this email."
+    return send_smtp_message(
+        subject="TNT Portal Email Verification",
+        target_email=target_email,
+        body=(
+            "Use this verification code to confirm your email:\n"
+            f"{verify_code}\n\n"
+            "This code expires in 60 minutes. If you did not request this, ignore this email."
+        ),
     )
-
-    try:
-        with smtplib.SMTP(smtp_host, smtp_port, timeout=15) as smtp:
-            smtp.starttls()
-            smtp.login(smtp_user, smtp_password)
-            smtp.send_message(msg)
-        return True
-    except Exception as exc:
-        print(f"[SMTP] verify email send failed: {exc}", flush=True)
-        return False
 
 
 def get_smtp_config() -> dict[str, Any]:
@@ -853,6 +863,8 @@ def get_smtp_config() -> dict[str, Any]:
     except ValueError:
         env_port = 587
 
+    print(f"[CONFIG] ENV variables - host={bool(env_host)}, user={bool(env_user)}, pass={bool(env_password)}", flush=True)
+
     with get_db() as conn:
         host = get_setting(conn, "smtp_host", env_host).strip()
         port_raw = get_setting(conn, "smtp_port", str(env_port)).strip() or str(env_port)
@@ -864,6 +876,11 @@ def get_smtp_config() -> dict[str, Any]:
         port = int(port_raw)
     except ValueError:
         port = env_port
+
+    if not sender:
+        sender = user
+
+    print(f"[CONFIG] Final config - host={repr(host)}, port={port}, user={repr(user)}, from={repr(sender)}", flush=True)
 
     return {
         "host": host,
@@ -904,8 +921,11 @@ def get_setting(conn: sqlite3.Connection, key: str, default: str = "") -> str:
         (key,),
     ).fetchone()
     if not row:
+        print(f"[DB] Setting '{key}' not found, using default: {repr(default)}", flush=True)
         return default
-    return str(row["setting_value"])
+    value = str(row["setting_value"])
+    print(f"[DB] Setting '{key}' loaded: {repr(value)}", flush=True)
+    return value
 
 
 def set_setting(conn: sqlite3.Connection, key: str, value: str) -> None:
@@ -917,6 +937,7 @@ def set_setting(conn: sqlite3.Connection, key: str, value: str) -> None:
         """,
         (key, value),
     )
+    print(f"[DB] Setting '{key}' saved: {repr(value)}", flush=True)
 
 
 def fetch_state_alliances(conn: sqlite3.Connection, state_number: str) -> list[dict[str, Any]]:
@@ -1866,6 +1887,25 @@ async def save_smtp_settings(request: web.Request) -> web.StreamResponse:
     return flash_response("/dashboard", translate_request(request, "smtp_settings_saved"), "success")
 
 
+async def test_smtp_connection(request: web.Request) -> web.StreamResponse:
+    user = get_current_user(request)
+    if not user or not user["is_admin"]:
+        return flash_response("/dashboard", translate_request(request, "admin_required"), "error")
+
+    # Test email is the logged-in user's email or a test email
+    test_email = str(user.get("email", "")).strip() or "test@example.com"
+    
+    success = send_smtp_message(
+        subject="TNT Portal SMTP Test",
+        target_email=test_email,
+        body="This is a test message from TNT Portal SMTP configuration.\n\nIf you received this, SMTP is working correctly!"
+    )
+    
+    if success:
+        return flash_response("/dashboard", f"Test email sent to {test_email}", "success")
+    return flash_response("/dashboard", "SMTP test failed. Check the logs for details.", "error")
+
+
 async def save_state_settings(request: web.Request) -> web.StreamResponse:
     user = get_current_user(request)
     if not user or not user["is_admin"]:
@@ -2259,6 +2299,7 @@ def build_app() -> web.Application:
     app.router.add_get("/dashboard", dashboard)
     app.router.add_post("/dashboard/settings/state", save_state_settings)
     app.router.add_post("/dashboard/settings/smtp", save_smtp_settings)
+    app.router.add_post("/dashboard/settings/smtp/test", test_smtp_connection)
     app.router.add_post("/dashboard/state-alliances", add_state_alliance)
     app.router.add_post("/dashboard/state-alliances/{alliance_id}/delete", delete_state_alliance)
     app.router.add_post("/dashboard/lists/{list_key}", update_list_config)

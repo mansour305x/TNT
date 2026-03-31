@@ -53,6 +53,9 @@
       </label>
       <button class="btn btn-primary" type="submit">{{ 'Save SMTP' if lang == 'en' else 'حفظ SMTP' }}</button>
     </form>
+    <form method="post" action="/dashboard/settings/smtp/test" style="margin-top: 1rem;">
+      <button class="btn btn-secondary" type="submit">{{ 'Test SMTP' if lang == 'en' else 'اختبار SMTP' }}</button>
+    </form>
   </section>
 </div>
 
