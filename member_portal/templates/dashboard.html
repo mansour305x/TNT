@@ -27,6 +27,33 @@
       <button class="btn" type="submit">{{ 'Add Alliance' if lang == 'en' else 'إضافة التحالف' }}</button>
     </form>
   </section>
+
+  <section class="panel">
+    <h2>{{ 'SMTP Email Settings' if lang == 'en' else 'إعدادات بريد SMTP' }}</h2>
+    <form method="post" action="/dashboard/settings/smtp" class="form-grid">
+      <label>
+        <span>{{ 'SMTP Host' if lang == 'en' else 'خادم SMTP' }}</span>
+        <input type="text" name="smtp_host" value="{{ smtp_settings.host or '' }}" placeholder="smtp.gmail.com" required />
+      </label>
+      <label>
+        <span>{{ 'SMTP Port' if lang == 'en' else 'منفذ SMTP' }}</span>
+        <input type="number" name="smtp_port" value="{{ smtp_settings.port or '587' }}" required />
+      </label>
+      <label>
+        <span>{{ 'SMTP User' if lang == 'en' else 'مستخدم SMTP' }}</span>
+        <input type="text" name="smtp_user" value="{{ smtp_settings.user or '' }}" required />
+      </label>
+      <label>
+        <span>{{ 'SMTP Password' if lang == 'en' else 'كلمة مرور SMTP' }}</span>
+        <input type="password" name="smtp_password" autocomplete="new-password" placeholder="{{ 'Leave empty to keep current' if lang == 'en' else 'اتركها فارغة للإبقاء على الحالية' }}" />
+      </label>
+      <label>
+        <span>{{ 'From Email' if lang == 'en' else 'بريد المرسل' }}</span>
+        <input type="email" name="smtp_from" value="{{ smtp_settings.from or '' }}" required />
+      </label>
+      <button class="btn btn-primary" type="submit">{{ 'Save SMTP' if lang == 'en' else 'حفظ SMTP' }}</button>
+    </form>
+  </section>
 </div>
 
 <section class="panel table-panel">

@@ -1,5 +1,7 @@
 import hashlib
 import hmac
+import io
+import csv
 import os
 import secrets
 import sqlite3
@@ -71,6 +73,7 @@ TRANSLATIONS = {
         "email_verify_invalid": "Invalid or expired verification link",
         "email_verify_code_invalid": "Invalid or expired verification code",
         "email_service_unavailable": "Email service is unavailable. Configure SMTP first",
+        "smtp_settings_saved": "SMTP settings saved",
         "verify_email_title": "TNT Alliance | Verify Email",
         "current_password_required": "Current password is required",
         "current_password_invalid": "Current password is incorrect",
@@ -147,6 +150,7 @@ TRANSLATIONS = {
         "email_verify_invalid": "رابط التحقق غير صالح أو منتهي",
         "email_verify_code_invalid": "رمز التحقق غير صالح أو منتهي",
         "email_service_unavailable": "خدمة البريد غير متاحة. اضبط إعدادات SMTP أولاً",
+        "smtp_settings_saved": "تم حفظ إعدادات SMTP",
         "verify_email_title": "تحالف TNT | توثيق البريد",
         "current_password_required": "كلمة المرور الحالية مطلوبة",
         "current_password_invalid": "كلمة المرور الحالية غير صحيحة",
@@ -774,11 +778,12 @@ def upsert_oauth_user(
 
 
 def send_password_reset_email(target_email: str, reset_link: str) -> bool:
-    smtp_host = os.getenv("SMTP_HOST", "").strip()
-    smtp_port = int(os.getenv("SMTP_PORT", "587").strip() or "587")
-    smtp_user = os.getenv("SMTP_USER", "").strip()
-    smtp_password = os.getenv("SMTP_PASSWORD", "").strip()
-    smtp_from = os.getenv("SMTP_FROM", smtp_user).strip()
+    cfg = get_smtp_config()
+    smtp_host = cfg["host"]
+    smtp_port = cfg["port"]
+    smtp_user = cfg["user"]
+    smtp_password = cfg["password"]
+    smtp_from = cfg["from"]
 
     if not all([smtp_host, smtp_user, smtp_password, smtp_from]):
         return False
@@ -799,16 +804,18 @@ def send_password_reset_email(target_email: str, reset_link: str) -> bool:
             smtp.login(smtp_user, smtp_password)
             smtp.send_message(msg)
         return True
-    except Exception:
+    except Exception as exc:
+        print(f"[SMTP] password reset send failed: {exc}", flush=True)
         return False
 
 
 def send_email_verification_email(target_email: str, verify_code: str) -> bool:
-    smtp_host = os.getenv("SMTP_HOST", "").strip()
-    smtp_port = int(os.getenv("SMTP_PORT", "587").strip() or "587")
-    smtp_user = os.getenv("SMTP_USER", "").strip()
-    smtp_password = os.getenv("SMTP_PASSWORD", "").strip()
-    smtp_from = os.getenv("SMTP_FROM", smtp_user).strip()
+    cfg = get_smtp_config()
+    smtp_host = cfg["host"]
+    smtp_port = cfg["port"]
+    smtp_user = cfg["user"]
+    smtp_password = cfg["password"]
+    smtp_from = cfg["from"]
 
     if not all([smtp_host, smtp_user, smtp_password, smtp_from]):
         return False
@@ -829,8 +836,42 @@ def send_email_verification_email(target_email: str, verify_code: str) -> bool:
             smtp.login(smtp_user, smtp_password)
             smtp.send_message(msg)
         return True
-    except Exception:
+    except Exception as exc:
+        print(f"[SMTP] verify email send failed: {exc}", flush=True)
         return False
+
+
+def get_smtp_config() -> dict[str, Any]:
+    env_host = os.getenv("SMTP_HOST", "").strip()
+    env_port_raw = os.getenv("SMTP_PORT", "587").strip() or "587"
+    env_user = os.getenv("SMTP_USER", "").strip()
+    env_password = os.getenv("SMTP_PASSWORD", "").strip()
+    env_from = os.getenv("SMTP_FROM", env_user).strip()
+
+    try:
+        env_port = int(env_port_raw)
+    except ValueError:
+        env_port = 587
+
+    with get_db() as conn:
+        host = get_setting(conn, "smtp_host", env_host).strip()
+        port_raw = get_setting(conn, "smtp_port", str(env_port)).strip() or str(env_port)
+        user = get_setting(conn, "smtp_user", env_user).strip()
+        password = get_setting(conn, "smtp_password", env_password).strip()
+        sender = get_setting(conn, "smtp_from", env_from or user).strip()
+
+    try:
+        port = int(port_raw)
+    except ValueError:
+        port = env_port
+
+    return {
+        "host": host,
+        "port": port,
+        "user": user,
+        "password": password,
+        "from": sender,
+    }
 
 
 def fetch_fields_and_options(conn: sqlite3.Connection) -> list[dict[str, Any]]:
@@ -1767,6 +1808,12 @@ async def dashboard(request: web.Request) -> web.Response:
         state_number = get_setting(conn, "state_number")
         alliances = fetch_state_alliances(conn, state_number) if state_number else []
         list_configs = fetch_list_configs(conn)
+        smtp_settings = {
+            "host": get_setting(conn, "smtp_host", os.getenv("SMTP_HOST", "")),
+            "port": get_setting(conn, "smtp_port", os.getenv("SMTP_PORT", "587")),
+            "user": get_setting(conn, "smtp_user", os.getenv("SMTP_USER", "")),
+            "from": get_setting(conn, "smtp_from", os.getenv("SMTP_FROM", "")),
+        }
         users = conn.execute(
             "SELECT id, username, email, auth_provider, is_admin, state, created_at FROM users ORDER BY id DESC LIMIT 50"
         ).fetchall()
@@ -1790,9 +1837,33 @@ async def dashboard(request: web.Request) -> web.Response:
             "state_number": state_number,
             "alliances": alliances,
             "list_configs": list_configs,
+            "smtp_settings": smtp_settings,
             "users": users_list,
         },
     )
+
+
+async def save_smtp_settings(request: web.Request) -> web.StreamResponse:
+    user = get_current_user(request)
+    if not user or not user["is_admin"]:
+        return flash_response("/portal", translate_request(request, "admin_required"), "error")
+
+    data = await request.post()
+    smtp_host = str(data.get("smtp_host", "")).strip()
+    smtp_port = str(data.get("smtp_port", "587")).strip() or "587"
+    smtp_user = str(data.get("smtp_user", "")).strip()
+    smtp_password = str(data.get("smtp_password", "")).strip()
+    smtp_from = str(data.get("smtp_from", "")).strip()
+
+    with get_db() as conn:
+        set_setting(conn, "smtp_host", smtp_host)
+        set_setting(conn, "smtp_port", smtp_port)
+        set_setting(conn, "smtp_user", smtp_user)
+        if smtp_password:
+            set_setting(conn, "smtp_password", smtp_password)
+        set_setting(conn, "smtp_from", smtp_from)
+
+    return flash_response("/dashboard", translate_request(request, "smtp_settings_saved"), "success")
 
 
 async def save_state_settings(request: web.Request) -> web.StreamResponse:
@@ -2187,6 +2258,7 @@ def build_app() -> web.Application:
 
     app.router.add_get("/dashboard", dashboard)
     app.router.add_post("/dashboard/settings/state", save_state_settings)
+    app.router.add_post("/dashboard/settings/smtp", save_smtp_settings)
     app.router.add_post("/dashboard/state-alliances", add_state_alliance)
     app.router.add_post("/dashboard/state-alliances/{alliance_id}/delete", delete_state_alliance)
     app.router.add_post("/dashboard/lists/{list_key}", update_list_config)
