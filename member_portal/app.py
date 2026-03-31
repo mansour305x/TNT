@@ -68,6 +68,7 @@ TRANSLATIONS = {
         "password_changed": "Password changed successfully",
         "email_verification_sent": "Verification email sent. Please confirm your new email",
         "email_verification_code_sent": "Verification code sent to your email",
+        "email_saved_unverified": "Email saved, but the verification code could not be sent. Configure SMTP, then resend the code",
 
         "email_verified_success": "Email verified successfully",
         "email_verify_invalid": "Invalid or expired verification link",
@@ -145,6 +146,7 @@ TRANSLATIONS = {
         "password_changed": "تم تغيير كلمة المرور بنجاح",
         "email_verification_sent": "تم إرسال رسالة تحقق، يرجى تأكيد بريدك الجديد",
         "email_verification_code_sent": "تم إرسال رمز التحقق إلى بريدك",
+        "email_saved_unverified": "تم حفظ البريد، لكن تعذر إرسال رمز التحقق. اضبط SMTP ثم أعد إرسال الرمز",
 
         "email_verified_success": "تم توثيق البريد الإلكتروني بنجاح",
         "email_verify_invalid": "رابط التحقق غير صالح أو منتهي",
@@ -1343,6 +1345,11 @@ async def update_profile(request: web.Request) -> web.StreamResponse:
         expires_at = int(time.time()) + EMAIL_VERIFY_TOKEN_TTL_SECONDS
 
         conn.execute(
+            "UPDATE users SET email = ?, email_verified = 0 WHERE id = ?",
+            (email, user["id"]),
+        )
+
+        conn.execute(
             "UPDATE email_verifications SET used_at = ? WHERE user_id = ? AND used_at IS NULL",
             (int(time.time()), user["id"]),
         )
@@ -1354,7 +1361,7 @@ async def update_profile(request: web.Request) -> web.StreamResponse:
     sent = send_email_verification_email(email, verify_code)
     if sent:
         return flash_response("/profile/verify-email", translate_request(request, "email_verification_code_sent"), "success")
-    return flash_response("/profile", translate_request(request, "email_service_unavailable"), "error")
+    return flash_response("/profile", translate_request(request, "email_saved_unverified"), "info")
 
 
 async def verify_profile_email(request: web.Request) -> web.StreamResponse:
