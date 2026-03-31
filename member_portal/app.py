@@ -1214,13 +1214,15 @@ async def profile_page(request: web.Request) -> web.Response:
             (user["id"], int(time.time())),
         ).fetchone()
 
+    smtp_configured = is_smtp_configured()
+
     return render_template(
         request,
         "profile.html",
         {
             "title": translate_request(request, "profile_title"),
-            "has_pending_email_verification": bool(pending_verification),
-            "smtp_configured": is_smtp_configured(),
+            "has_pending_email_verification": bool(pending_verification) and smtp_configured,
+            "smtp_configured": smtp_configured,
         },
     )
 
@@ -1356,6 +1358,11 @@ async def update_profile(request: web.Request) -> web.StreamResponse:
 
         current_email = normalize_email(str(user.get("email", "")))
         if email == current_email:
+            if not is_smtp_configured() and not int(user.get("email_verified", 0)):
+                conn.execute(
+                    "UPDATE email_verifications SET used_at = ? WHERE user_id = ? AND used_at IS NULL",
+                    (int(time.time()), user["id"]),
+                )
             return flash_response("/profile", translate_request(request, "profile_saved"), "success")
 
         smtp_ready = is_smtp_configured()
@@ -1370,7 +1377,7 @@ async def update_profile(request: web.Request) -> web.StreamResponse:
                 "UPDATE users SET email = ?, email_verified = 0 WHERE id = ?",
                 (email, user["id"]),
             )
-            return flash_response("/profile", translate_request(request, "email_saved_unverified"), "info")
+            return flash_response("/profile", translate_request(request, "profile_saved"), "success")
 
         verify_code = f"{secrets.randbelow(1000000):06d}"
         token_hash = hash_reset_token(verify_code)
@@ -1388,7 +1395,12 @@ async def update_profile(request: web.Request) -> web.StreamResponse:
     sent = send_email_verification_email(email, verify_code)
     if sent:
         return flash_response("/profile/verify-email", translate_request(request, "email_verification_code_sent"), "success")
-    return flash_response("/profile", translate_request(request, "email_saved_unverified"), "info")
+    with get_db() as conn:
+        conn.execute(
+            "UPDATE email_verifications SET used_at = ? WHERE user_id = ? AND used_at IS NULL",
+            (int(time.time()), user["id"]),
+        )
+    return flash_response("/profile", translate_request(request, "profile_saved"), "success")
 
 
 async def verify_profile_email(request: web.Request) -> web.StreamResponse:
@@ -2173,7 +2185,12 @@ async def resend_email_verification_otp(request: web.Request) -> web.StreamRespo
         return flash_response("/", translate_request(request, "login_required"), "error")
 
     if not is_smtp_configured():
-        return flash_response("/profile", translate_request(request, "email_saved_unverified"), "info")
+        with get_db() as conn:
+            conn.execute(
+                "UPDATE email_verifications SET used_at = ? WHERE user_id = ? AND used_at IS NULL",
+                (int(time.time()), user["id"]),
+            )
+        return flash_response("/profile", translate_request(request, "profile_saved"), "success")
 
     with get_db() as conn:
         pending = conn.execute(
