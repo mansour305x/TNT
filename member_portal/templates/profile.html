@@ -19,7 +19,7 @@
       </label>
       <label>
         <span>{{ 'Email' if lang == 'en' else 'البريد الإلكتروني' }}</span>
-        <input type="email" name="email" value="{{ current_user.email or '' }}" required />
+        <input type="email" name="email" value="{{ current_user.email or '' }}" {{ 'required' if current_user.email else '' }} />
       </label>
       <p class="portal-sub" style="margin-top:-4px;">
         {% if current_user.email_verified %}

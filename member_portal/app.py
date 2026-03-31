@@ -38,7 +38,16 @@ load_dotenv(BASE_DIR / ".env")
 SESSION_COOKIE = "member_portal_session"
 LANG_COOKIE = "portal_lang"
 SESSION_TTL_SECONDS = 60 * 60 * 24 * 7
-SECRET_KEY = os.getenv("PORTAL_SECRET_KEY", "change-me-in-production").encode("utf-8")
+_raw_secret = os.getenv("PORTAL_SECRET_KEY", "")
+if not _raw_secret:
+    import warnings
+    warnings.warn(
+        "PORTAL_SECRET_KEY is not set. Using an insecure default — set this env var in production!",
+        RuntimeWarning,
+        stacklevel=1,
+    )
+    _raw_secret = "change-me-in-production"
+SECRET_KEY = _raw_secret.encode("utf-8")
 RESET_TOKEN_TTL_SECONDS = 60 * 30
 EMAIL_VERIFY_TOKEN_TTL_SECONDS = 60 * 60
 
@@ -555,12 +564,20 @@ def is_valid_email(raw_email: str) -> bool:
 
 
 def get_user_for_login(conn: sqlite3.Connection, login_id: str) -> sqlite3.Row | None:
-    # Use deterministic lookup to avoid accidental cross-account matches.
-    # If input looks like email, authenticate by email only; otherwise by username only.
+    # If input looks like email, try email column first then fall back to
+    # username column. The fallback handles admin accounts whose username
+    # contains '@' but whose email column is empty (e.g. mn9@hotmail.com).
     if "@" in login_id:
-        return conn.execute(
+        row = conn.execute(
             "SELECT id, password_hash FROM users WHERE email = ? LIMIT 1",
             (normalize_email(login_id),),
+        ).fetchone()
+        if row:
+            return row
+        # Fallback: admin/system accounts may use an email-like string as username
+        return conn.execute(
+            "SELECT id, password_hash FROM users WHERE username = ? LIMIT 1",
+            (login_id,),
         ).fetchone()
     return conn.execute(
         "SELECT id, password_hash FROM users WHERE username = ? LIMIT 1",
@@ -1419,6 +1436,11 @@ async def logout_user(request: web.Request) -> web.StreamResponse:
     return resp
 
 
+async def logout_user_post(request: web.Request) -> web.StreamResponse:
+    """POST /logout — preferred over GET for CSRF safety."""
+    return await logout_user(request)
+
+
 async def update_profile(request: web.Request) -> web.StreamResponse:
     user = get_current_user(request)
     if not user:
@@ -1427,6 +1449,22 @@ async def update_profile(request: web.Request) -> web.StreamResponse:
     data = await request.post()
     email = normalize_email(str(data.get("email", "")))
     state = str(data.get("state", "")).strip()
+
+    current_email = normalize_email(str(user.get("email", "")))
+
+    # Allow state-only update when both submitted and stored emails are empty
+    if email and not is_valid_email(email):
+        return flash_response("/profile", translate_request(request, "invalid_email"), "error")
+
+    # If no email submitted and user has no email, allow state-only save
+    if not email and not current_email:
+        with get_db() as conn:
+            conn.execute("UPDATE users SET state = ? WHERE id = ?", (state, user["id"]))
+        return flash_response("/profile", translate_request(request, "profile_saved"), "success")
+
+    # Require valid email when submitting one
+    if not email:
+        email = current_email
 
     if not is_valid_email(email):
         return flash_response("/profile", translate_request(request, "invalid_email"), "error")
@@ -1449,7 +1487,6 @@ async def update_profile(request: web.Request) -> web.StreamResponse:
         # Keep state update immediate, but require email verification when email changes.
         conn.execute("UPDATE users SET state = ? WHERE id = ?", (state, user["id"]))
 
-        current_email = normalize_email(str(user.get("email", "")))
         if email == current_email:
             if not is_smtp_configured() and not int(user.get("email_verified", 0)):
                 conn.execute(
@@ -2462,6 +2499,7 @@ def build_app() -> web.Application:
     app.router.add_get("/oauth/{provider}/start", oauth_start)
     app.router.add_get("/oauth/{provider}/callback", oauth_callback)
     app.router.add_get("/logout", logout_user)
+    app.router.add_post("/logout", logout_user_post)
     app.router.add_post("/profile", update_profile)
     app.router.add_post("/profile/verify-email", verify_profile_email)
     app.router.add_post("/profile/password", change_profile_password)

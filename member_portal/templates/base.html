@@ -72,10 +72,12 @@
               <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 12a5 5 0 100-10 5 5 0 000 10zm0 2c-4.418 0-8 1.79-8 4v2h16v-2c0-2.21-3.582-4-8-4z"/></svg>
               {{ 'Profile Settings' if lang == 'en' else 'إعدادات الملف الشخصي' }}
             </a>
-            <a class="btn btn-ghost profile-logout" href="/logout">
-              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg>
-              {{ 'Logout' if lang == 'en' else 'تسجيل الخروج' }}
-            </a>
+            <form method="post" action="/logout" style="display:contents;">
+              <button type="submit" class="btn btn-ghost profile-logout" style="width:100%;text-align:inherit;cursor:pointer;">
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg>
+                {{ 'Logout' if lang == 'en' else 'تسجيل الخروج' }}
+              </button>
+            </form>
           </div>
         </div>
       </div>

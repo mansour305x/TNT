@@ -113,7 +113,7 @@
         </tr>
         {% else %}
         <tr>
-          <td colspan="10" class="empty-table-row">{{ 'No transfer records yet.' if lang == 'en' else 'لا توجد سجلات تحويل بعد.' }}</td>
+          <td colspan="{{ 11 if current_user and current_user.is_admin else 10 }}" class="empty-table-row">{{ 'No transfer records yet.' if lang == 'en' else 'لا توجد سجلات تحويل بعد.' }}</td>
         </tr>
         {% endfor %}
       </tbody>
