@@ -60,6 +60,11 @@ TRANSLATIONS = {
         "reset_password_min": "New password must be at least 6 characters",
         "reset_password_success": "Password has been reset. You can sign in now",
         "role_updated": "User role updated",
+        "profile_title": "TNT Alliance | Profile",
+        "profile_saved": "Profile updated successfully",
+        "password_changed": "Password changed successfully",
+        "current_password_required": "Current password is required",
+        "current_password_invalid": "Current password is incorrect",
         "cannot_downgrade_full_admin": "Cannot remove admin role from the main full admin account",
         "member_required": "Player ID, Current Name, Alliance, and Rank are required",
         "required_missing": "Missing required fields: {fields}",
@@ -118,6 +123,11 @@ TRANSLATIONS = {
         "reset_password_min": "كلمة المرور الجديدة يجب أن تكون 6 أحرف على الأقل",
         "reset_password_success": "تمت إعادة تعيين كلمة المرور، يمكنك تسجيل الدخول الآن",
         "role_updated": "تم تحديث صلاحية المستخدم",
+        "profile_title": "تحالف TNT | الملف الشخصي",
+        "profile_saved": "تم تحديث الملف الشخصي بنجاح",
+        "password_changed": "تم تغيير كلمة المرور بنجاح",
+        "current_password_required": "كلمة المرور الحالية مطلوبة",
+        "current_password_invalid": "كلمة المرور الحالية غير صحيحة",
         "cannot_downgrade_full_admin": "لا يمكن سحب صلاحية الأدمن من حساب الأدمن الرئيسي",
         "member_required": "Player ID و Current Name و Alliance و Rank مطلوبة",
         "required_missing": "حقول مطلوبة ناقصة: {fields}",
@@ -545,7 +555,7 @@ def get_current_user(request: web.Request) -> dict[str, Any] | None:
 
     with get_db() as conn:
         row = conn.execute(
-            "SELECT id, username, is_admin, created_at, state FROM users WHERE id = ?",
+            "SELECT id, username, email, is_admin, created_at, state FROM users WHERE id = ?",
             (user_id,),
         ).fetchone()
 
@@ -1035,6 +1045,20 @@ async def transfers_page(request: web.Request) -> web.Response:
     )
 
 
+async def profile_page(request: web.Request) -> web.Response:
+    user = get_current_user(request)
+    if not user:
+        return flash_response("/", translate_request(request, "login_required"), "error")
+
+    return render_template(
+        request,
+        "profile.html",
+        {
+            "title": translate_request(request, "profile_title"),
+        },
+    )
+
+
 async def set_language(request: web.Request) -> web.StreamResponse:
     data = await request.post()
     selected_lang = str(data.get("lang", "en")).strip().lower()
@@ -1109,6 +1133,64 @@ async def logout_user(request: web.Request) -> web.StreamResponse:
     resp.del_cookie(SESSION_COOKIE)
     resp.set_cookie("flash", f"info|{translate_request(request, 'logout_success')}", max_age=12, httponly=True, samesite="Lax")
     return resp
+
+
+async def update_profile(request: web.Request) -> web.StreamResponse:
+    user = get_current_user(request)
+    if not user:
+        return flash_response("/", translate_request(request, "login_required"), "error")
+
+    data = await request.post()
+    email = normalize_email(str(data.get("email", "")))
+    state = str(data.get("state", "")).strip()
+
+    if not is_valid_email(email):
+        return flash_response("/profile", translate_request(request, "invalid_email"), "error")
+
+    with get_db() as conn:
+        email_exists = conn.execute(
+            "SELECT 1 FROM users WHERE email = ? AND id != ? LIMIT 1",
+            (email, user["id"]),
+        ).fetchone()
+        if email_exists:
+            return flash_response("/profile", translate_request(request, "email_exists"), "error")
+
+        conn.execute(
+            "UPDATE users SET email = ?, state = ? WHERE id = ?",
+            (email, state, user["id"]),
+        )
+
+    return flash_response("/profile", translate_request(request, "profile_saved"), "success")
+
+
+async def change_profile_password(request: web.Request) -> web.StreamResponse:
+    user = get_current_user(request)
+    if not user:
+        return flash_response("/", translate_request(request, "login_required"), "error")
+
+    data = await request.post()
+    current_password = str(data.get("current_password", "")).strip()
+    new_password = str(data.get("new_password", "")).strip()
+
+    if not current_password:
+        return flash_response("/profile", translate_request(request, "current_password_required"), "error")
+    if len(new_password) < 6:
+        return flash_response("/profile", translate_request(request, "username_password_min"), "error")
+
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT password_hash FROM users WHERE id = ? LIMIT 1",
+            (user["id"],),
+        ).fetchone()
+        if not row or not verify_password(current_password, row["password_hash"]):
+            return flash_response("/profile", translate_request(request, "current_password_invalid"), "error")
+
+        conn.execute(
+            "UPDATE users SET password_hash = ?, auth_provider = 'email' WHERE id = ?",
+            (hash_password(new_password), user["id"]),
+        )
+
+    return flash_response("/profile", translate_request(request, "password_changed"), "success")
 
 
 async def forgot_password_request(request: web.Request) -> web.StreamResponse:
@@ -1733,9 +1815,11 @@ def build_app() -> web.Application:
     app.router.add_get("/forgot-password", forgot_password_page)
     app.router.add_get("/reset-password", reset_password_page)
     app.router.add_get("/portal", portal_page)
+    app.router.add_get("/portal/", portal_page)
     app.router.add_get("/member-records/new", member_registry_page)
     app.router.add_get("/members", members_page)
     app.router.add_get("/transfers", transfers_page)
+    app.router.add_get("/profile", profile_page)
 
     app.router.add_post("/register", register_user)
     app.router.add_post("/login", login_user)
@@ -1744,6 +1828,8 @@ def build_app() -> web.Application:
     app.router.add_get("/oauth/{provider}/start", oauth_start)
     app.router.add_get("/oauth/{provider}/callback", oauth_callback)
     app.router.add_get("/logout", logout_user)
+    app.router.add_post("/profile", update_profile)
+    app.router.add_post("/profile/password", change_profile_password)
     app.router.add_post("/set-language", set_language)
 
     app.router.add_post("/records/create", create_record)

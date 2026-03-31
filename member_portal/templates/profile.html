@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="portal-header">
+  <div>
+    <h1 class="portal-title">{{ 'Profile Settings' if lang == 'en' else 'إعدادات الملف الشخصي' }}</h1>
+    <p class="portal-sub">{{ 'Update your email and password from here.' if lang == 'en' else 'حدّث بريدك الإلكتروني وكلمة المرور من هنا.' }}</p>
+  </div>
+  <a class="btn btn-ghost" href="/portal">{{ 'Back to Lists' if lang == 'en' else 'العودة للقوائم' }}</a>
+</div>
+
+<div class="layout">
+  <section class="panel">
+    <h2>{{ 'Account Info' if lang == 'en' else 'بيانات الحساب' }}</h2>
+    <form method="post" action="/profile" class="stacked">
+      <label>
+        <span>{{ 'Username' if lang == 'en' else 'اسم المستخدم' }}</span>
+        <input type="text" value="{{ current_user.username }}" disabled />
+      </label>
+      <label>
+        <span>{{ 'Email' if lang == 'en' else 'البريد الإلكتروني' }}</span>
+        <input type="email" name="email" value="{{ current_user.email or '' }}" required />
+      </label>
+      <label>
+        <span>{{ 'State / Province' if lang == 'en' else 'الولاية / المنطقة' }}</span>
+        <input type="text" name="state" value="{{ current_user.state or '' }}" />
+      </label>
+      <button class="btn btn-primary" type="submit">{{ 'Save Info' if lang == 'en' else 'حفظ البيانات' }}</button>
+    </form>
+  </section>
+
+  <section class="panel">
+    <h2>{{ 'Change Password' if lang == 'en' else 'تغيير كلمة المرور' }}</h2>
+    <form method="post" action="/profile/password" class="stacked">
+      <label>
+        <span>{{ 'Current Password' if lang == 'en' else 'كلمة المرور الحالية' }}</span>
+        <input type="password" name="current_password" autocomplete="current-password" required />
+      </label>
+      <label>
+        <span>{{ 'New Password' if lang == 'en' else 'كلمة المرور الجديدة' }}</span>
+        <input type="password" name="new_password" autocomplete="new-password" minlength="6" required />
+      </label>
+      <button class="btn btn-primary" type="submit">{{ 'Change Password' if lang == 'en' else 'تغيير كلمة المرور' }}</button>
+    </form>
+  </section>
+</div>
+
+{% endblock %}
