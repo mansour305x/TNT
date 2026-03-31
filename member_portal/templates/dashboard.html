@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="hero">
+  <h1>Control Panel</h1>
+  <p>Manage dynamic dropdown fields and options used in the registration form.</p>
+</section>
+
+<div class="layout">
+  <section class="panel">
+    <h2>Add Dropdown Field</h2>
+    <form method="post" action="/dashboard/fields" class="form-grid">
+      <label>
+        <span>Label</span>
+        <input type="text" name="label" required />
+      </label>
+      <label>
+        <span>Key (unique)</span>
+        <input type="text" name="field_key" required />
+      </label>
+      <label>
+        <span>Sort Order</span>
+        <input type="number" name="sort_order" value="100" />
+      </label>
+      <label class="inline-check">
+        <input type="checkbox" name="is_required" /> Required
+      </label>
+      <button class="btn btn-primary" type="submit">Add Field</button>
+    </form>
+  </section>
+
+  <section class="panel">
+    <h2>Add Option (Admin)</h2>
+    <form method="post" action="/dashboard/options" class="form-grid">
+      <label>
+        <span>Field</span>
+        <select name="field_id" required>
+          <option value="">Select field</option>
+          {% for field in fields %}
+          <option value="{{ field.id }}">{{ field.label }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>
+        <span>Option Value</span>
+        <input type="text" name="value" required />
+      </label>
+      <label>
+        <span>Sort Order</span>
+        <input type="number" name="sort_order" value="100" />
+      </label>
+      <button class="btn" type="submit">Add Option</button>
+    </form>
+  </section>
+</div>
+
+<section class="panel table-panel">
+  <h2>Current Dropdown Setup</h2>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Field</th>
+          <th>Key</th>
+          <th>Required</th>
+          <th>Options</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for field in fields %}
+        <tr>
+          <td>{{ field.id }}</td>
+          <td>{{ field.label }}</td>
+          <td>{{ field.field_key }}</td>
+          <td>{{ 'Yes' if field.is_required else 'No' }}</td>
+          <td>
+            {% if field.options %}
+              {% for option in field.options %}
+              <div>{{ option.value }}</div>
+              {% endfor %}
+            {% else %}
+              -
+            {% endif %}
+          </td>
+          <td>
+            <form method="post" action="/dashboard/fields/{{ field.id }}/delete" onsubmit="return confirm('Delete this field and all options?')">
+              <button class="btn btn-danger" type="submit">Delete</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="panel table-panel">
+  <h2>Recent Users</h2>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Username</th>
+          <th>Role</th>
+          <th>Created At</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for u in users %}
+        <tr>
+          <td>{{ u.id }}</td>
+          <td>{{ u.username }}</td>
+          <td>{{ 'Admin' if u.is_admin else 'User' }}</td>
+          <td>{{ u.created_at }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

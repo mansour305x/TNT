@@ -9,3 +9,4 @@ version
 backups
 captcha_images
 .vscode
+member_portal/portal.db
