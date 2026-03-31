@@ -9,6 +9,7 @@
   <div style="display:flex;gap:.6rem;align-items:center;">
     <a class="btn btn-ghost" href="/portal">{{ 'Back to Lists' if lang == 'en' else 'العودة للقوائم' }}</a>
     {% if current_user and current_user.is_admin %}
+      <a class="btn btn-ghost" href="/transfers/export">{{ 'Export CSV' if lang == 'en' else 'تصدير CSV' }}</a>
       {% set del_all_msg = 'Delete ALL transfer records? This cannot be undone.' if lang == 'en' else 'هل تريد حذف جميع سجلات التحويلات؟ لا يمكن التراجع.' %}
       <form method="post" action="/transfers/delete-all" onsubmit="return confirm('{{ del_all_msg }}');">
         <button class="btn btn-danger" type="submit">{{ 'Delete All' if lang == 'en' else 'حذف الكل' }}</button>
@@ -85,6 +86,7 @@
           <th>{{ 'Future Alliance' if lang == 'en' else 'التحالف المستقبلي' }}</th>
           <th>{{ 'By' if lang == 'en' else 'بواسطة' }}</th>
           <th>{{ 'Date' if lang == 'en' else 'التاريخ' }}</th>
+          {% if current_user and current_user.is_admin %}<th>{{ 'Action' if lang == 'en' else 'إجراء' }}</th>{% endif %}
         </tr>
       </thead>
       <tbody>
@@ -100,6 +102,14 @@
           <td><span class="value-badge badge-default">{{ rec.future_alliance }}</span></td>
           <td>{{ rec.username or 'system' }}</td>
           <td class="date-cell">{{ rec.created_at[:10] }}</td>
+          {% if current_user and current_user.is_admin %}
+          <td>
+            {% set del_tr_msg = 'Delete this transfer record?' if lang == 'en' else 'حذف سجل التحويل هذا؟' %}
+            <form method="post" action="/transfers/{{ rec.id }}/delete" onsubmit="return confirm('{{ del_tr_msg }}')">
+              <button class="btn btn-danger btn-sm" type="submit">{{ 'Delete' if lang == 'en' else 'حذف' }}</button>
+            </form>
+          </td>
+          {% endif %}
         </tr>
         {% else %}
         <tr>

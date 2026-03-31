@@ -214,12 +214,20 @@
           <td>{{ u.state or '-' }}</td>
           <td>{{ ('Admin' if u.is_admin else 'User') if lang == 'en' else ('أدمن' if u.is_admin else 'مستخدم') }}</td>
           <td>
-            <form method="post" action="/dashboard/users/{{ u.id }}/role">
-              <input type="hidden" name="is_admin" value="{{ 0 if u.is_admin else 1 }}" />
-              <button class="btn btn-sm {% if u.is_admin %}btn-danger{% else %}btn-primary{% endif %}" type="submit">
-                {{ ('Revoke Admin' if u.is_admin else 'Make Admin') if lang == 'en' else ('سحب الأدمن' if u.is_admin else 'جعله أدمن') }}
-              </button>
-            </form>
+            <div style="display:flex;gap:.4rem;flex-wrap:wrap;align-items:center;">
+              <form method="post" action="/dashboard/users/{{ u.id }}/role">
+                <input type="hidden" name="is_admin" value="{{ 0 if u.is_admin else 1 }}" />
+                <button class="btn btn-sm {% if u.is_admin %}btn-danger{% else %}btn-primary{% endif %}" type="submit">
+                  {{ ('Revoke Admin' if u.is_admin else 'Make Admin') if lang == 'en' else ('سحب الأدمن' if u.is_admin else 'جعله أدمن') }}
+                </button>
+              </form>
+              {% if u.is_deletable %}
+              {% set del_user_msg = 'Delete this user permanently?' if lang == 'en' else 'حذف هذا المستخدم نهائياً؟' %}
+              <form method="post" action="/dashboard/users/{{ u.id }}/delete" onsubmit="return confirm('{{ del_user_msg }}')">
+                <button class="btn btn-sm btn-danger" type="submit">{{ 'Delete' if lang == 'en' else 'حذف' }}</button>
+              </form>
+              {% endif %}
+            </div>
           </td>
           <td>{{ u.created_at }}</td>
         </tr>

@@ -102,6 +102,11 @@ TRANSLATIONS = {
         "transfer_saved": "Transfer record saved",
         "all_members_deleted": "All member records deleted",
         "all_transfers_deleted": "All transfer records deleted",
+        "user_deleted": "User account deleted",
+        "cannot_delete_self": "You cannot delete your own account",
+        "cannot_delete_admin": "Cannot delete a protected admin account",
+        "transfer_deleted": "Transfer record deleted",
+        "code_resent": "Verification code has been resent to your email",
         "portal_title": "TNT Alliance | Portal",
         "lists_title": "TNT Alliance | Lists",
         "transfers_title": "TNT Alliance | Transfers",
@@ -173,6 +178,11 @@ TRANSLATIONS = {
         "transfer_saved": "تم حفظ سجل التحويل",
         "all_members_deleted": "تم حذف جميع سجلات الأعضاء",
         "all_transfers_deleted": "تم حذف جميع سجلات التحويلات",
+        "user_deleted": "تم حذف حساب المستخدم",
+        "cannot_delete_self": "لا يمكنك حذف حسابك الخاص",
+        "cannot_delete_admin": "لا يمكن حذف حساب الأدمن المحمي",
+        "transfer_deleted": "تم حذف سجل التحويل",
+        "code_resent": "تم إعادة إرسال رمز التحقق إلى بريدك",
         "portal_title": "تحالف TNT | التسجيل",
         "lists_title": "تحالف TNT | القوائم",
         "transfers_title": "تحالف TNT | التحويلات",
@@ -1761,6 +1771,16 @@ async def dashboard(request: web.Request) -> web.Response:
             "SELECT id, username, email, auth_provider, is_admin, state, created_at FROM users ORDER BY id DESC LIMIT 50"
         ).fetchall()
 
+    full_admin_lower = {DEFAULT_FULL_ADMIN_USERNAME.strip().lower(), "admin"}
+    users_list = []
+    for u in users:
+        u_dict = dict(u)
+        u_dict["is_deletable"] = (
+            str(u_dict["username"]).strip().lower() not in full_admin_lower
+            and u_dict["id"] != user["id"]
+        )
+        users_list.append(u_dict)
+
     return render_template(
         request,
         "dashboard.html",
@@ -1770,7 +1790,7 @@ async def dashboard(request: web.Request) -> web.Response:
             "state_number": state_number,
             "alliances": alliances,
             "list_configs": list_configs,
-            "users": [dict(u) for u in users],
+            "users": users_list,
         },
     )
 
@@ -1963,6 +1983,164 @@ async def update_user_role(request: web.Request) -> web.StreamResponse:
     return flash_response("/dashboard", translate_request(request, "role_updated"), "success")
 
 
+async def delete_user(request: web.Request) -> web.StreamResponse:
+    user = get_current_user(request)
+    if not user or not user["is_admin"]:
+        return flash_response("/portal", translate_request(request, "admin_required"), "error")
+
+    target_user_id = int(request.match_info["user_id"])
+
+    if target_user_id == user["id"]:
+        return flash_response("/dashboard", translate_request(request, "cannot_delete_self"), "error")
+
+    with get_db() as conn:
+        target = conn.execute(
+            "SELECT id, username FROM users WHERE id = ? LIMIT 1",
+            (target_user_id,),
+        ).fetchone()
+        if not target:
+            return flash_response("/dashboard", translate_request(request, "member_not_found"), "error")
+
+        if is_full_admin_username(str(target["username"])):
+            return flash_response("/dashboard", translate_request(request, "cannot_delete_admin"), "error")
+
+        conn.execute("DELETE FROM users WHERE id = ?", (target_user_id,))
+
+    return flash_response("/dashboard", translate_request(request, "user_deleted"), "info")
+
+
+async def delete_transfer(request: web.Request) -> web.StreamResponse:
+    user = get_current_user(request)
+    if not user or not user["is_admin"]:
+        return flash_response("/portal", translate_request(request, "admin_required"), "error")
+
+    transfer_id = int(request.match_info["transfer_id"])
+
+    with get_db() as conn:
+        conn.execute("DELETE FROM transfer_records WHERE id = ?", (transfer_id,))
+
+    return flash_response("/transfers", translate_request(request, "transfer_deleted"), "info")
+
+
+async def resend_email_verification_otp(request: web.Request) -> web.StreamResponse:
+    user = get_current_user(request)
+    if not user:
+        return flash_response("/", translate_request(request, "login_required"), "error")
+
+    with get_db() as conn:
+        pending = conn.execute(
+            """
+            SELECT id, new_email
+            FROM email_verifications
+            WHERE user_id = ? AND used_at IS NULL AND expires_at >= ?
+            ORDER BY id DESC
+            LIMIT 1
+            """,
+            (user["id"], int(time.time())),
+        ).fetchone()
+
+        if not pending:
+            return flash_response("/profile", translate_request(request, "email_verify_code_invalid"), "error")
+
+        verify_code = f"{secrets.randbelow(1000000):06d}"
+        token_hash = hash_reset_token(verify_code)
+        expires_at = int(time.time()) + EMAIL_VERIFY_TOKEN_TTL_SECONDS
+
+        conn.execute(
+            "UPDATE email_verifications SET token_hash = ?, expires_at = ? WHERE id = ?",
+            (token_hash, expires_at, pending["id"]),
+        )
+        new_email = pending["new_email"]
+
+    sent = send_email_verification_email(new_email, verify_code)
+    if sent:
+        return flash_response("/profile/verify-email", translate_request(request, "code_resent"), "success")
+    return flash_response("/profile", translate_request(request, "email_service_unavailable"), "error")
+
+
+async def export_members_csv(request: web.Request) -> web.Response:
+    user = get_current_user(request)
+    if not user or not user["is_admin"]:
+        return flash_response("/portal", translate_request(request, "admin_required"), "error")
+
+    with get_db() as conn:
+        fields = fetch_fields_and_options(conn)
+        records = conn.execute(
+            """
+            SELECT r.id, r.member_name, r.member_uid, r.alliance, r.rank, r.notes, r.created_at, u.username
+            FROM member_records r
+            LEFT JOIN users u ON u.id = r.created_by
+            ORDER BY r.id ASC
+            """
+        ).fetchall()
+        values = conn.execute(
+            """
+            SELECT v.record_id, f.field_key, v.option_value
+            FROM member_record_values v
+            JOIN dropdown_fields f ON f.id = v.field_id
+            """
+        ).fetchall()
+
+    values_by_record: dict[int, dict[str, str]] = {}
+    for row in values:
+        values_by_record.setdefault(int(row["record_id"]), {})[str(row["field_key"])] = str(row["option_value"])
+
+    output = io.StringIO()
+    field_keys = [f["field_key"] for f in fields]
+    field_labels = [f["label"] for f in fields]
+    writer = csv.writer(output)
+    writer.writerow(["ID", "Member Name", "Member UID", "Alliance", "Rank", "Notes"] + field_labels + ["Registered By", "Created At"])
+
+    for rec in records:
+        dv = values_by_record.get(int(rec["id"]), {})
+        writer.writerow(
+            [rec["id"], rec["member_name"], rec["member_uid"], rec["alliance"], rec["rank"], rec["notes"]]
+            + [dv.get(fk, "") for fk in field_keys]
+            + [rec["username"] or "", rec["created_at"]]
+        )
+
+    return web.Response(
+        text=output.getvalue(),
+        content_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=members.csv"},
+    )
+
+
+async def export_transfers_csv(request: web.Request) -> web.Response:
+    user = get_current_user(request)
+    if not user or not user["is_admin"]:
+        return flash_response("/portal", translate_request(request, "admin_required"), "error")
+
+    with get_db() as conn:
+        records = conn.execute(
+            """
+            SELECT t.id, t.member_name, t.member_uid, t.power, t.furnace, t.current_state,
+                   t.invite_type, t.future_alliance, t.created_at, u.username
+            FROM transfer_records t
+            LEFT JOIN users u ON u.id = t.created_by
+            ORDER BY t.id ASC
+            """
+        ).fetchall()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["ID", "Member Name", "Member UID", "Power", "Furnace", "Current State", "Invite Type", "Future Alliance", "Registered By", "Created At"])
+
+    for rec in records:
+        writer.writerow([
+            rec["id"], rec["member_name"], rec["member_uid"],
+            rec["power"], rec["furnace"], rec["current_state"],
+            rec["invite_type"], rec["future_alliance"],
+            rec["username"] or "", rec["created_at"],
+        ])
+
+    return web.Response(
+        text=output.getvalue(),
+        content_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=transfers.csv"},
+    )
+
+
 def build_app() -> web.Application:
     init_db()
 
@@ -2016,6 +2194,11 @@ def build_app() -> web.Application:
     app.router.add_post("/dashboard/fields/{field_id}/delete", delete_field)
     app.router.add_post("/dashboard/options", add_option_admin)
     app.router.add_post("/dashboard/users/{user_id}/role", update_user_role)
+    app.router.add_post("/dashboard/users/{user_id}/delete", delete_user)
+    app.router.add_post("/transfers/{transfer_id}/delete", delete_transfer)
+    app.router.add_post("/profile/resend-verify-email", resend_email_verification_otp)
+    app.router.add_get("/members/export", export_members_csv)
+    app.router.add_get("/transfers/export", export_transfers_csv)
 
     return app
 

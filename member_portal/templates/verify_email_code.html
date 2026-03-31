@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="portal-header">
+  <div>
+    <h1 class="portal-title">{{ 'Verify Email' if lang == 'en' else 'توثيق البريد الإلكتروني' }}</h1>
+    <p class="portal-sub">
+      {{ 'Enter the 6-digit code sent to:' if lang == 'en' else 'أدخل رمز التحقق المرسل إلى:' }}
+      <strong>{{ pending_email }}</strong>
+    </p>
+  </div>
+  <a class="btn btn-ghost" href="/profile">{{ 'Back to Profile' if lang == 'en' else 'العودة للملف الشخصي' }}</a>
+</div>
+
+<section class="panel" style="max-width:520px;margin:0 auto;">
+  <form method="post" action="/profile/verify-email" class="stacked">
+    <label>
+      <span>{{ 'Verification Code' if lang == 'en' else 'رمز التحقق' }}</span>
+      <input type="text" name="verify_code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autofocus required />
+    </label>
+    <button class="btn btn-primary" type="submit">{{ 'Verify' if lang == 'en' else 'تحقق' }}</button>
+  </form>
+  <div style="margin-top:1rem;text-align:center;">
+    <form method="post" action="/profile/resend-verify-email">
+      <button class="btn btn-ghost" type="submit">{{ 'Resend Code' if lang == 'en' else 'إعادة إرسال الرمز' }}</button>
+    </form>
+  </div>
+</section>
+
+{% endblock %}

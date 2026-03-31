@@ -8,10 +8,15 @@
       {{ records|length }} {{ 'member(s) in the database' if lang == 'en' else 'عضو في قاعدة البيانات' }}
     </p>
   </div>
-  <a class="btn btn-ghost" href="/portal">
-    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12l7-7 7 7"/></svg>
-    {{ 'Register Member' if lang == 'en' else 'تسجيل عضو' }}
-  </a>
+  <div style="display:flex;gap:.6rem;align-items:center;">
+    <a class="btn btn-ghost" href="/portal">
+      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12l7-7 7 7"/></svg>
+      {{ 'Register Member' if lang == 'en' else 'تسجيل عضو' }}
+    </a>
+    {% if current_user and current_user.is_admin %}
+    <a class="btn btn-ghost" href="/members/export">{{ 'Export CSV' if lang == 'en' else 'تصدير CSV' }}</a>
+    {% endif %}
+  </div>
 </div>
 
 <div class="members-card">
