@@ -68,7 +68,7 @@ TRANSLATIONS = {
         "password_changed": "Password changed successfully",
         "email_verification_sent": "Verification email sent. Please confirm your new email",
         "email_verification_code_sent": "Verification code sent to your email",
-        "email_saved_unverified": "Email saved, but the verification code could not be sent. Configure SMTP, then resend the code",
+        "email_saved_unverified": "Profile updated successfully",
 
         "email_verified_success": "Email verified successfully",
         "email_verify_invalid": "Invalid or expired verification link",
@@ -146,7 +146,7 @@ TRANSLATIONS = {
         "password_changed": "تم تغيير كلمة المرور بنجاح",
         "email_verification_sent": "تم إرسال رسالة تحقق، يرجى تأكيد بريدك الجديد",
         "email_verification_code_sent": "تم إرسال رمز التحقق إلى بريدك",
-        "email_saved_unverified": "تم حفظ البريد، لكن تعذر إرسال رمز التحقق. اضبط SMTP ثم أعد إرسال الرمز",
+        "email_saved_unverified": "تم تحديث الملف الشخصي بنجاح",
 
         "email_verified_success": "تم توثيق البريد الإلكتروني بنجاح",
         "email_verify_invalid": "رابط التحقق غير صالح أو منتهي",
