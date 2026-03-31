@@ -1383,7 +1383,15 @@ async def login_user(request: web.Request) -> web.StreamResponse:
         user = get_user_for_login(conn, login_id)
 
     if not user or not verify_password(password, user["password_hash"]):
-        return flash_response("/", translate_request(request, "invalid_login"), "error")
+        # Prevent stale sessions from showing another account after a failed login attempt.
+        existing_session = parse_session_cookie(request.cookies.get(SESSION_COOKIE))
+        if existing_session:
+            with get_db() as conn:
+                rotate_session_nonce(conn, existing_session[0])
+
+        resp = flash_response("/", translate_request(request, "invalid_login"), "error")
+        resp.del_cookie(SESSION_COOKIE)
+        return resp
 
     with get_db() as conn:
         new_nonce = rotate_session_nonce(conn, int(user["id"]))
