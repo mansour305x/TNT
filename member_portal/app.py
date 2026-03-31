@@ -17,7 +17,18 @@ from dotenv import load_dotenv
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 BASE_DIR = Path(__file__).resolve().parent
-DB_PATH = BASE_DIR / "portal.db"
+
+
+def resolve_db_path() -> Path:
+    explicit_path = os.getenv("PORTAL_DB_PATH", "").strip()
+    if explicit_path:
+        return Path(explicit_path)
+    if os.getenv("RENDER", "").lower() == "true":
+        return Path("/var/data/portal.db")
+    return BASE_DIR / "portal.db"
+
+
+DB_PATH = resolve_db_path()
 TEMPLATES_DIR = BASE_DIR / "templates"
 STATIC_DIR = BASE_DIR / "static"
 
@@ -246,6 +257,7 @@ DEFAULT_DROPDOWN_FIELDS = [
 
 
 def get_db() -> sqlite3.Connection:
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
@@ -349,6 +361,7 @@ def init_db() -> None:
         migrate_member_record_columns(conn)
         migrate_user_state_column(conn)
         migrate_user_auth_columns(conn)
+        ensure_user_session_nonces(conn)
         migrate_transfer_record_columns(conn)
         create_oauth_identities_table(conn)
         create_password_resets_table(conn)
@@ -393,6 +406,19 @@ def migrate_user_auth_columns(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE users ADD COLUMN auth_provider TEXT NOT NULL DEFAULT 'email'")
     if "email_verified" not in columns:
         conn.execute("ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 0")
+    if "session_nonce" not in columns:
+        conn.execute("ALTER TABLE users ADD COLUMN session_nonce TEXT NOT NULL DEFAULT ''")
+
+
+def ensure_user_session_nonces(conn: sqlite3.Connection) -> None:
+    rows = conn.execute(
+        "SELECT id FROM users WHERE session_nonce = '' OR session_nonce IS NULL"
+    ).fetchall()
+    for row in rows:
+        conn.execute(
+            "UPDATE users SET session_nonce = ? WHERE id = ?",
+            (generate_session_nonce(), row["id"]),
+        )
 
 
 def create_oauth_identities_table(conn: sqlite3.Connection) -> None:
@@ -502,14 +528,14 @@ def ensure_admin_account(conn: sqlite3.Connection, username: str, password: str)
 
     if existing:
         conn.execute(
-            "UPDATE users SET password_hash = ?, is_admin = 1, auth_provider = 'email' WHERE id = ?",
-            (hash_password(password), existing["id"]),
+            "UPDATE users SET password_hash = ?, is_admin = 1, auth_provider = 'email', session_nonce = ? WHERE id = ?",
+            (hash_password(password), generate_session_nonce(), existing["id"]),
         )
         return
 
     conn.execute(
-        "INSERT INTO users (username, password_hash, is_admin, email, auth_provider) VALUES (?, ?, 1, '', 'email')",
-        (username, hash_password(password)),
+        "INSERT INTO users (username, password_hash, is_admin, email, auth_provider, session_nonce) VALUES (?, ?, 1, '', 'email', ?)",
+        (username, hash_password(password), generate_session_nonce()),
     )
 
 
@@ -552,6 +578,16 @@ def hash_reset_token(raw_token: str) -> str:
     return hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
 
 
+def generate_session_nonce() -> str:
+    return secrets.token_hex(16)
+
+
+def rotate_session_nonce(conn: sqlite3.Connection, user_id: int) -> str:
+    nonce = generate_session_nonce()
+    conn.execute("UPDATE users SET session_nonce = ? WHERE id = ?", (nonce, user_id))
+    return nonce
+
+
 def build_public_origin(request: web.Request) -> str:
     configured = os.getenv("PUBLIC_BASE_URL", "").strip().rstrip("/")
     if configured:
@@ -586,40 +622,44 @@ def sign_session(payload: str) -> str:
     return hmac.new(SECRET_KEY, payload.encode("utf-8"), hashlib.sha256).hexdigest()
 
 
-def issue_session_cookie(user_id: int) -> str:
+def issue_session_cookie(user_id: int, session_nonce: str) -> str:
     expires_at = int(time.time()) + SESSION_TTL_SECONDS
-    payload = f"{user_id}:{expires_at}"
+    payload = f"{user_id}:{expires_at}:{session_nonce}"
     signature = sign_session(payload)
     return f"{payload}:{signature}"
 
 
-def parse_session_cookie(cookie_value: str | None) -> int | None:
+def parse_session_cookie(cookie_value: str | None) -> tuple[int, str] | None:
     if not cookie_value:
         return None
     try:
-        user_id_s, expires_s, signature = cookie_value.split(":", 2)
-        payload = f"{user_id_s}:{expires_s}"
+        user_id_s, expires_s, nonce, signature = cookie_value.split(":", 3)
+        payload = f"{user_id_s}:{expires_s}:{nonce}"
         if not hmac.compare_digest(signature, sign_session(payload)):
             return None
         if int(expires_s) < int(time.time()):
             return None
-        return int(user_id_s)
+        return (int(user_id_s), nonce)
     except (ValueError, TypeError):
         return None
 
 
 def get_current_user(request: web.Request) -> dict[str, Any] | None:
-    user_id = parse_session_cookie(request.cookies.get(SESSION_COOKIE))
-    if not user_id:
+    session_data = parse_session_cookie(request.cookies.get(SESSION_COOKIE))
+    if not session_data:
         return None
+    user_id, cookie_nonce = session_data
 
     with get_db() as conn:
         row = conn.execute(
-            "SELECT id, username, email, email_verified, is_admin, created_at, state FROM users WHERE id = ?",
+            "SELECT id, username, email, email_verified, is_admin, created_at, state, session_nonce FROM users WHERE id = ?",
             (user_id,),
         ).fetchone()
 
     if not row:
+        return None
+
+    if str(row["session_nonce"] or "") != cookie_nonce:
         return None
 
     return dict(row)
@@ -761,10 +801,10 @@ def upsert_oauth_user(
         password_hash = hash_password(secrets.token_urlsafe(24))
         cur = conn.execute(
             """
-            INSERT INTO users (username, password_hash, is_admin, state, email, auth_provider)
-            VALUES (?, ?, 0, '', ?, ?)
+            INSERT INTO users (username, password_hash, is_admin, state, email, auth_provider, session_nonce)
+            VALUES (?, ?, 0, '', ?, ?, ?)
             """,
-            (username, password_hash, email, provider),
+            (username, password_hash, email, provider, generate_session_nonce()),
         )
         user_id = int(cur.lastrowid)
 
@@ -1288,8 +1328,8 @@ async def register_user(request: web.Request) -> web.StreamResponse:
             return flash_response("/register-page", translate_request(request, "email_exists"), "error")
         try:
             conn.execute(
-                "INSERT INTO users (username, password_hash, is_admin, state, email, auth_provider) VALUES (?, ?, 0, ?, ?, 'email')",
-                (username, hash_password(password), state, email),
+                "INSERT INTO users (username, password_hash, is_admin, state, email, auth_provider, session_nonce) VALUES (?, ?, 0, ?, ?, 'email', ?)",
+                (username, hash_password(password), state, email, generate_session_nonce()),
             )
         except sqlite3.IntegrityError:
             return flash_response("/register-page", translate_request(request, "username_exists"), "error")
@@ -1314,10 +1354,13 @@ async def login_user(request: web.Request) -> web.StreamResponse:
     if not user or not verify_password(password, user["password_hash"]):
         return flash_response("/", translate_request(request, "invalid_login"), "error")
 
+    with get_db() as conn:
+        new_nonce = rotate_session_nonce(conn, int(user["id"]))
+
     resp = web.HTTPFound(location="/portal")
     resp.set_cookie(
         SESSION_COOKIE,
-        issue_session_cookie(user["id"]),
+        issue_session_cookie(int(user["id"]), new_nonce),
         max_age=SESSION_TTL_SECONDS,
         httponly=True,
         samesite="Lax",
@@ -1327,6 +1370,10 @@ async def login_user(request: web.Request) -> web.StreamResponse:
 
 
 async def logout_user(request: web.Request) -> web.StreamResponse:
+    session_data = parse_session_cookie(request.cookies.get(SESSION_COOKIE))
+    if session_data:
+        with get_db() as conn:
+            rotate_session_nonce(conn, session_data[0])
     resp = web.HTTPFound(location="/")
     resp.del_cookie(SESSION_COOKIE)
     resp.set_cookie("flash", f"info|{translate_request(request, 'logout_success')}", max_age=12, httponly=True, samesite="Lax")
@@ -1618,11 +1665,12 @@ async def oauth_callback(request: web.Request) -> web.StreamResponse:
 
         with get_db() as conn:
             user_id = upsert_oauth_user(conn, provider, provider_uid, email, display_name)
+            new_nonce = rotate_session_nonce(conn, user_id)
 
         resp = web.HTTPFound(location="/portal")
         resp.set_cookie(
             SESSION_COOKIE,
-            issue_session_cookie(user_id),
+            issue_session_cookie(user_id, new_nonce),
             max_age=SESSION_TTL_SECONDS,
             httponly=True,
             samesite="Lax",
