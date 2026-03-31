@@ -76,6 +76,7 @@ TRANSLATIONS = {
         "reset_password_min": "New password must be at least 6 characters",
         "reset_password_success": "Password has been reset. You can sign in now",
         "role_updated": "User role updated",
+        "all_sessions_reset": "All users have been logged out successfully",
         "profile_title": "TNT Alliance | Profile",
         "profile_saved": "Profile updated successfully",
         "password_changed": "Password changed successfully",
@@ -156,6 +157,7 @@ TRANSLATIONS = {
         "reset_password_min": "كلمة المرور الجديدة يجب أن تكون 6 أحرف على الأقل",
         "reset_password_success": "تمت إعادة تعيين كلمة المرور، يمكنك تسجيل الدخول الآن",
         "role_updated": "تم تحديث صلاحية المستخدم",
+        "all_sessions_reset": "تم تسجيل خروج جميع المستخدمين بنجاح",
         "profile_title": "تحالف TNT | الملف الشخصي",
         "profile_saved": "تم تحديث الملف الشخصي بنجاح",
         "password_changed": "تم تغيير كلمة المرور بنجاح",
@@ -2036,6 +2038,33 @@ async def test_smtp_connection(request: web.Request) -> web.StreamResponse:
     return flash_response("/dashboard", "SMTP test failed. Check the logs for details.", "error")
 
 
+async def reset_all_sessions(request: web.Request) -> web.StreamResponse:
+    user = get_current_user(request)
+    if not user or not user["is_admin"]:
+        return flash_response("/portal", translate_request(request, "admin_required"), "error")
+
+    current_admin_nonce = ""
+    with get_db() as conn:
+        users = conn.execute("SELECT id FROM users").fetchall()
+        for row in users:
+            new_nonce = rotate_session_nonce(conn, int(row["id"]))
+            if int(row["id"]) == int(user["id"]):
+                current_admin_nonce = new_nonce
+
+        if not current_admin_nonce:
+            current_admin_nonce = rotate_session_nonce(conn, int(user["id"]))
+
+    resp = flash_response("/dashboard", translate_request(request, "all_sessions_reset"), "success")
+    resp.set_cookie(
+        SESSION_COOKIE,
+        issue_session_cookie(int(user["id"]), current_admin_nonce),
+        max_age=SESSION_TTL_SECONDS,
+        httponly=True,
+        samesite="Lax",
+    )
+    return resp
+
+
 async def save_state_settings(request: web.Request) -> web.StreamResponse:
     user = get_current_user(request)
     if not user or not user["is_admin"]:
@@ -2443,6 +2472,7 @@ def build_app() -> web.Application:
     app.router.add_post("/dashboard/settings/state", save_state_settings)
     app.router.add_post("/dashboard/settings/smtp", save_smtp_settings)
     app.router.add_post("/dashboard/settings/smtp/test", test_smtp_connection)
+    app.router.add_post("/dashboard/sessions/reset", reset_all_sessions)
     app.router.add_post("/dashboard/state-alliances", add_state_alliance)
     app.router.add_post("/dashboard/state-alliances/{alliance_id}/delete", delete_state_alliance)
     app.router.add_post("/dashboard/lists/{list_key}", update_list_config)

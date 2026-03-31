@@ -57,6 +57,14 @@
       <button class="btn btn-secondary" type="submit">{{ 'Test SMTP' if lang == 'en' else 'اختبار SMTP' }}</button>
     </form>
   </section>
+
+  <section class="panel">
+    <h2>{{ 'Security Actions' if lang == 'en' else 'إجراءات الأمان' }}</h2>
+    {% set reset_sessions_msg = 'Force logout all users now?' if lang == 'en' else 'تسجيل خروج جميع المستخدمين الآن؟' %}
+    <form method="post" action="/dashboard/sessions/reset" onsubmit="return confirm('{{ reset_sessions_msg }}')">
+      <button class="btn btn-danger" type="submit">{{ 'Force Logout All Users' if lang == 'en' else 'تسجيل خروج جميع المستخدمين' }}</button>
+    </form>
+  </section>
 </div>
 
 <section class="panel table-panel">
