@@ -27,6 +27,7 @@ LANG_COOKIE = "portal_lang"
 SESSION_TTL_SECONDS = 60 * 60 * 24 * 7
 SECRET_KEY = os.getenv("PORTAL_SECRET_KEY", "change-me-in-production").encode("utf-8")
 RESET_TOKEN_TTL_SECONDS = 60 * 30
+EMAIL_VERIFY_TOKEN_TTL_SECONDS = 60 * 60
 
 DEFAULT_FULL_ADMIN_USERNAME = os.getenv("PORTAL_FULL_ADMIN_USERNAME", "mn9@hotmail.com")
 DEFAULT_FULL_ADMIN_PASSWORD = os.getenv("PORTAL_FULL_ADMIN_PASSWORD", "DANGER")
@@ -63,6 +64,10 @@ TRANSLATIONS = {
         "profile_title": "TNT Alliance | Profile",
         "profile_saved": "Profile updated successfully",
         "password_changed": "Password changed successfully",
+        "email_verification_sent": "Verification email sent. Please confirm your new email",
+        "email_verification_sent_dev": "Verification link (dev): {link}",
+        "email_verified_success": "Email verified successfully",
+        "email_verify_invalid": "Invalid or expired verification link",
         "current_password_required": "Current password is required",
         "current_password_invalid": "Current password is incorrect",
         "cannot_downgrade_full_admin": "Cannot remove admin role from the main full admin account",
@@ -126,6 +131,10 @@ TRANSLATIONS = {
         "profile_title": "تحالف TNT | الملف الشخصي",
         "profile_saved": "تم تحديث الملف الشخصي بنجاح",
         "password_changed": "تم تغيير كلمة المرور بنجاح",
+        "email_verification_sent": "تم إرسال رسالة تحقق، يرجى تأكيد بريدك الجديد",
+        "email_verification_sent_dev": "رابط التحقق (تجريبي): {link}",
+        "email_verified_success": "تم توثيق البريد الإلكتروني بنجاح",
+        "email_verify_invalid": "رابط التحقق غير صالح أو منتهي",
         "current_password_required": "كلمة المرور الحالية مطلوبة",
         "current_password_invalid": "كلمة المرور الحالية غير صحيحة",
         "cannot_downgrade_full_admin": "لا يمكن سحب صلاحية الأدمن من حساب الأدمن الرئيسي",
@@ -319,6 +328,7 @@ def init_db() -> None:
         migrate_transfer_record_columns(conn)
         create_oauth_identities_table(conn)
         create_password_resets_table(conn)
+        create_email_verifications_table(conn)
         ensure_admin_account(
             conn,
             username="admin",
@@ -357,6 +367,8 @@ def migrate_user_auth_columns(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE users ADD COLUMN email TEXT NOT NULL DEFAULT ''")
     if "auth_provider" not in columns:
         conn.execute("ALTER TABLE users ADD COLUMN auth_provider TEXT NOT NULL DEFAULT 'email'")
+    if "email_verified" not in columns:
+        conn.execute("ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 0")
 
 
 def create_oauth_identities_table(conn: sqlite3.Connection) -> None:
@@ -382,6 +394,23 @@ def create_password_resets_table(conn: sqlite3.Connection) -> None:
         CREATE TABLE IF NOT EXISTS password_resets (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER NOT NULL,
+            token_hash TEXT NOT NULL UNIQUE,
+            expires_at INTEGER NOT NULL,
+            used_at INTEGER,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+        )
+        """
+    )
+
+
+def create_email_verifications_table(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS email_verifications (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            new_email TEXT NOT NULL,
             token_hash TEXT NOT NULL UNIQUE,
             expires_at INTEGER NOT NULL,
             used_at INTEGER,
@@ -499,6 +528,13 @@ def hash_reset_token(raw_token: str) -> str:
     return hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
 
 
+def build_public_origin(request: web.Request) -> str:
+    configured = os.getenv("PUBLIC_BASE_URL", "").strip().rstrip("/")
+    if configured:
+        return configured
+    return f"{request.scheme}://{request.host}"
+
+
 def issue_oauth_state(provider: str) -> str:
     expires_at = int(time.time()) + 600
     nonce = secrets.token_hex(12)
@@ -555,7 +591,7 @@ def get_current_user(request: web.Request) -> dict[str, Any] | None:
 
     with get_db() as conn:
         row = conn.execute(
-            "SELECT id, username, email, is_admin, created_at, state FROM users WHERE id = ?",
+            "SELECT id, username, email, email_verified, is_admin, created_at, state FROM users WHERE id = ?",
             (user_id,),
         ).fetchone()
 
@@ -749,6 +785,36 @@ def send_password_reset_email(target_email: str, reset_link: str) -> bool:
         return False
 
 
+def send_email_verification_email(target_email: str, verify_link: str) -> bool:
+    smtp_host = os.getenv("SMTP_HOST", "").strip()
+    smtp_port = int(os.getenv("SMTP_PORT", "587").strip() or "587")
+    smtp_user = os.getenv("SMTP_USER", "").strip()
+    smtp_password = os.getenv("SMTP_PASSWORD", "").strip()
+    smtp_from = os.getenv("SMTP_FROM", smtp_user).strip()
+
+    if not all([smtp_host, smtp_user, smtp_password, smtp_from]):
+        return False
+
+    msg = EmailMessage()
+    msg["Subject"] = "TNT Portal Email Verification"
+    msg["From"] = smtp_from
+    msg["To"] = target_email
+    msg.set_content(
+        "Verify your new email by opening this link:\n"
+        f"{verify_link}\n\n"
+        "If you did not request this, ignore this email."
+    )
+
+    try:
+        with smtplib.SMTP(smtp_host, smtp_port, timeout=15) as smtp:
+            smtp.starttls()
+            smtp.login(smtp_user, smtp_password)
+            smtp.send_message(msg)
+        return True
+    except Exception:
+        return False
+
+
 def fetch_fields_and_options(conn: sqlite3.Connection) -> list[dict[str, Any]]:
     fields = conn.execute(
         "SELECT id, field_key, label, sort_order, is_required FROM dropdown_fields ORDER BY sort_order, id"
@@ -796,7 +862,7 @@ def set_setting(conn: sqlite3.Connection, key: str, value: str) -> None:
 
 def fetch_state_alliances(conn: sqlite3.Connection, state_number: str) -> list[dict[str, Any]]:
     rows = conn.execute(
-        """
+    """
         SELECT a.id, a.state_number, a.alliance_tag, a.created_at, u.username
         FROM state_alliances a
         LEFT JOIN users u ON u.id = a.created_by
@@ -1155,12 +1221,76 @@ async def update_profile(request: web.Request) -> web.StreamResponse:
         if email_exists:
             return flash_response("/profile", translate_request(request, "email_exists"), "error")
 
+        # Keep state update immediate, but require email verification when email changes.
+        conn.execute("UPDATE users SET state = ? WHERE id = ?", (state, user["id"]))
+
+        current_email = normalize_email(str(user.get("email", "")))
+        if email == current_email:
+            return flash_response("/profile", translate_request(request, "profile_saved"), "success")
+
+        token = secrets.token_urlsafe(32)
+        token_hash = hash_reset_token(token)
+        expires_at = int(time.time()) + EMAIL_VERIFY_TOKEN_TTL_SECONDS
+
         conn.execute(
-            "UPDATE users SET email = ?, state = ? WHERE id = ?",
-            (email, state, user["id"]),
+            "UPDATE email_verifications SET used_at = ? WHERE user_id = ? AND new_email = ? AND used_at IS NULL",
+            (int(time.time()), user["id"], email),
+        )
+        conn.execute(
+            "INSERT INTO email_verifications (user_id, new_email, token_hash, expires_at) VALUES (?, ?, ?, ?)",
+            (user["id"], email, token_hash, expires_at),
         )
 
-    return flash_response("/profile", translate_request(request, "profile_saved"), "success")
+    verify_link = f"{build_public_origin(request)}/profile/verify-email?token={token}"
+    sent = send_email_verification_email(email, verify_link)
+    if sent:
+        return flash_response("/profile", translate_request(request, "email_verification_sent"), "success")
+    return flash_response(
+        "/profile",
+        translate_request(request, "email_verification_sent_dev", link=verify_link),
+        "info",
+    )
+
+
+async def verify_profile_email(request: web.Request) -> web.StreamResponse:
+    user = get_current_user(request)
+    if not user:
+        return flash_response("/", translate_request(request, "login_required"), "error")
+
+    token = str(request.query.get("token", "")).strip()
+    if not token:
+        return flash_response("/profile", translate_request(request, "email_verify_invalid"), "error")
+
+    now_ts = int(time.time())
+    token_hash = hash_reset_token(token)
+
+    with get_db() as conn:
+        row = conn.execute(
+            """
+            SELECT id, user_id, new_email
+            FROM email_verifications
+            WHERE token_hash = ? AND used_at IS NULL AND expires_at >= ?
+            LIMIT 1
+            """,
+            (token_hash, now_ts),
+        ).fetchone()
+        if not row or int(row["user_id"]) != int(user["id"]):
+            return flash_response("/profile", translate_request(request, "email_verify_invalid"), "error")
+
+        email_exists = conn.execute(
+            "SELECT 1 FROM users WHERE email = ? AND id != ? LIMIT 1",
+            (row["new_email"], user["id"]),
+        ).fetchone()
+        if email_exists:
+            return flash_response("/profile", translate_request(request, "email_exists"), "error")
+
+        conn.execute(
+            "UPDATE users SET email = ?, email_verified = 1 WHERE id = ?",
+            (row["new_email"], user["id"]),
+        )
+        conn.execute("UPDATE email_verifications SET used_at = ? WHERE id = ?", (now_ts, row["id"]))
+
+    return flash_response("/profile", translate_request(request, "email_verified_success"), "success")
 
 
 async def change_profile_password(request: web.Request) -> web.StreamResponse:
@@ -1820,6 +1950,7 @@ def build_app() -> web.Application:
     app.router.add_get("/members", members_page)
     app.router.add_get("/transfers", transfers_page)
     app.router.add_get("/profile", profile_page)
+    app.router.add_get("/profile/verify-email", verify_profile_email)
 
     app.router.add_post("/register", register_user)
     app.router.add_post("/login", login_user)

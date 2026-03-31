@@ -21,6 +21,13 @@
         <span>{{ 'Email' if lang == 'en' else 'البريد الإلكتروني' }}</span>
         <input type="email" name="email" value="{{ current_user.email or '' }}" required />
       </label>
+      <p class="portal-sub" style="margin-top:-4px;">
+        {% if current_user.email_verified %}
+          {{ 'Email status: Verified' if lang == 'en' else 'حالة البريد: موثق' }}
+        {% else %}
+          {{ 'Email status: Not verified yet. Save email to receive verification link.' if lang == 'en' else 'حالة البريد: غير موثق بعد. احفظ البريد لاستلام رابط التحقق.' }}
+        {% endif %}
+      </p>
       <label>
         <span>{{ 'State / Province' if lang == 'en' else 'الولاية / المنطقة' }}</span>
         <input type="text" name="state" value="{{ current_user.state or '' }}" />
