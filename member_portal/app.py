@@ -24,6 +24,52 @@ SECRET_KEY = os.getenv("PORTAL_SECRET_KEY", "change-me-in-production").encode("u
 DEFAULT_FULL_ADMIN_USERNAME = os.getenv("PORTAL_FULL_ADMIN_USERNAME", "mn9@hotmail.com")
 DEFAULT_FULL_ADMIN_PASSWORD = os.getenv("PORTAL_FULL_ADMIN_PASSWORD", "DANGER")
 
+TROOP_OPTIONS = [
+    "FC1",
+    "FC2",
+    "FC3",
+    "FC4",
+    "FC5",
+    "FC6",
+    "FC7",
+    "FC8",
+    "FC9",
+    "FC10",
+    "T11",
+    "T12",
+]
+
+DEFAULT_DROPDOWN_FIELDS = [
+    {
+        "field_key": "infantry",
+        "label": "Infantry",
+        "sort_order": 10,
+        "is_required": 1,
+        "options": TROOP_OPTIONS,
+    },
+    {
+        "field_key": "lancer",
+        "label": "Lancer",
+        "sort_order": 20,
+        "is_required": 1,
+        "options": TROOP_OPTIONS,
+    },
+    {
+        "field_key": "marksman",
+        "label": "Marksman",
+        "sort_order": 30,
+        "is_required": 1,
+        "options": TROOP_OPTIONS,
+    },
+    {
+        "field_key": "status",
+        "label": "Status",
+        "sort_order": 40,
+        "is_required": 1,
+        "options": ["Active", "Inactive"],
+    },
+]
+
 
 def get_db() -> sqlite3.Connection:
     conn = sqlite3.connect(DB_PATH)
@@ -71,6 +117,9 @@ def init_db() -> None:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 member_name TEXT NOT NULL,
                 member_uid TEXT NOT NULL,
+                alliance TEXT NOT NULL DEFAULT '',
+                rank TEXT NOT NULL DEFAULT '',
+                notes TEXT NOT NULL DEFAULT '',
                 created_by INTEGER,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY(created_by) REFERENCES users(id)
@@ -97,6 +146,51 @@ def init_db() -> None:
             username=DEFAULT_FULL_ADMIN_USERNAME,
             password=DEFAULT_FULL_ADMIN_PASSWORD,
         )
+        migrate_member_record_columns(conn)
+        ensure_default_dropdown_fields(conn)
+
+
+def migrate_member_record_columns(conn: sqlite3.Connection) -> None:
+    columns = {
+        row["name"] for row in conn.execute("PRAGMA table_info(member_records)").fetchall()
+    }
+    if "alliance" not in columns:
+        conn.execute("ALTER TABLE member_records ADD COLUMN alliance TEXT NOT NULL DEFAULT ''")
+    if "rank" not in columns:
+        conn.execute("ALTER TABLE member_records ADD COLUMN rank TEXT NOT NULL DEFAULT ''")
+    if "notes" not in columns:
+        conn.execute("ALTER TABLE member_records ADD COLUMN notes TEXT NOT NULL DEFAULT ''")
+
+
+def ensure_default_dropdown_fields(conn: sqlite3.Connection) -> None:
+    for field in DEFAULT_DROPDOWN_FIELDS:
+        existing = conn.execute(
+            "SELECT id FROM dropdown_fields WHERE field_key = ? LIMIT 1",
+            (field["field_key"],),
+        ).fetchone()
+
+        if existing:
+            field_id = int(existing["id"])
+            conn.execute(
+                "UPDATE dropdown_fields SET label = ?, sort_order = ?, is_required = ? WHERE id = ?",
+                (field["label"], field["sort_order"], field["is_required"], field_id),
+            )
+        else:
+            cur = conn.execute(
+                "INSERT INTO dropdown_fields (field_key, label, sort_order, is_required) VALUES (?, ?, ?, ?)",
+                (field["field_key"], field["label"], field["sort_order"], field["is_required"]),
+            )
+            field_id = int(cur.lastrowid)
+
+        for sort_order, option_value in enumerate(field["options"], start=1):
+            conn.execute(
+                """
+                INSERT INTO dropdown_options (field_id, value, sort_order)
+                VALUES (?, ?, ?)
+                ON CONFLICT(field_id, value) DO UPDATE SET sort_order = excluded.sort_order
+                """,
+                (field_id, option_value, sort_order),
+            )
 
 
 def ensure_admin_account(conn: sqlite3.Connection, username: str, password: str) -> None:
@@ -259,7 +353,7 @@ async def portal_page(request: web.Request) -> web.Response:
         fields = fetch_fields_and_options(conn)
         records = conn.execute(
             """
-            SELECT r.id, r.member_name, r.member_uid, r.created_at, u.username
+            SELECT r.id, r.member_name, r.member_uid, r.alliance, r.rank, r.notes, r.created_at, u.username
             FROM member_records r
             LEFT JOIN users u ON u.id = r.created_by
             ORDER BY r.id DESC
@@ -374,11 +468,14 @@ async def create_record(request: web.Request) -> web.StreamResponse:
         return flash_response("/", "سجل الدخول أولاً", "error")
 
     data = await request.post()
-    member_name = str(data.get("member_name", "")).strip()
-    member_uid = str(data.get("member_uid", "")).strip()
+    member_name = str(data.get("current_name", "")).strip()
+    member_uid = str(data.get("player_id", "")).strip()
+    alliance = str(data.get("alliance", "")).strip()
+    rank = str(data.get("rank", "")).strip()
+    notes = str(data.get("notes", "")).strip()
 
-    if not member_name or not member_uid:
-        return flash_response("/portal", "اسم العضو والـ ID مطلوبان", "error")
+    if not member_name or not member_uid or not alliance or not rank:
+        return flash_response("/portal", "Player ID و Current Name و Alliance و Rank مطلوبة", "error")
 
     with get_db() as conn:
         fields = fetch_fields_and_options(conn)
@@ -391,8 +488,11 @@ async def create_record(request: web.Request) -> web.StreamResponse:
             return flash_response("/portal", f"حقول مطلوبة ناقصة: {', '.join(missing_required)}", "error")
 
         cur = conn.execute(
-            "INSERT INTO member_records (member_name, member_uid, created_by) VALUES (?, ?, ?)",
-            (member_name, member_uid, user["id"]),
+            """
+            INSERT INTO member_records (member_name, member_uid, alliance, rank, notes, created_by)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (member_name, member_uid, alliance, rank, notes, user["id"]),
         )
         record_id = int(cur.lastrowid)
 

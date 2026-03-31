@@ -10,13 +10,23 @@
     <h2>Create Member Record</h2>
     <form method="post" action="/records/create" class="stacked">
       <label>
-        <span>اسم العضو</span>
-        <input type="text" name="member_name" required />
+        <span>Player ID</span>
+        <input type="text" name="player_id" required />
       </label>
 
       <label>
-        <span>ID العضو</span>
-        <input type="text" name="member_uid" required />
+        <span>Current Name</span>
+        <input type="text" name="current_name" required />
+      </label>
+
+      <label>
+        <span>Alliance</span>
+        <input type="text" name="alliance" required />
+      </label>
+
+      <label>
+        <span>Rank</span>
+        <input type="text" name="rank" required />
       </label>
 
       {% for field in fields %}
@@ -38,6 +48,11 @@
       </div>
       {% endfor %}
 
+      <label>
+        <span>Notes</span>
+        <textarea name="notes" rows="4" placeholder="Write any notes here"></textarea>
+      </label>
+
       <button class="btn btn-primary" type="submit">حفظ سجل العضو</button>
     </form>
 
@@ -55,9 +70,12 @@
         <thead>
           <tr>
             <th>ID</th>
-            <th>الاسم</th>
-            <th>UID</th>
+            <th>Player ID</th>
+            <th>Current Name</th>
+            <th>Alliance</th>
+            <th>Rank</th>
             <th>الاختيارات</th>
+            <th>Notes</th>
             <th>بواسطة</th>
             <th>الوقت</th>
           </tr>
@@ -66,17 +84,25 @@
           {% for rec in records %}
           <tr>
             <td>{{ rec.id }}</td>
-            <td>{{ rec.member_name }}</td>
             <td>{{ rec.member_uid }}</td>
+            <td>{{ rec.member_name }}</td>
+            <td>{{ rec.alliance }}</td>
+            <td>{{ rec.rank }}</td>
             <td>
               {% if rec.dynamic_values %}
                 {% for item in rec.dynamic_values %}
-                <div>{{ item.label }}: {{ item.value }}</div>
+                <div>
+                  {{ item.label }}:
+                  <span class="value-badge {% if item.value == 'Active' %}badge-active{% elif item.value == 'Inactive' %}badge-inactive{% elif item.value == 'T11' %}badge-t11{% elif item.value == 'T12' %}badge-t12{% else %}badge-default{% endif %}">
+                    {{ item.value }}
+                  </span>
+                </div>
                 {% endfor %}
               {% else %}
                 -
               {% endif %}
             </td>
+            <td>{{ rec.notes or '-' }}</td>
             <td>{{ rec.username or 'system' }}</td>
             <td>{{ rec.created_at }}</td>
           </tr>

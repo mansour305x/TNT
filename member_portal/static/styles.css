@@ -212,8 +212,21 @@ select {
   color: var(--ink);
 }
 
+textarea {
+  width: 100%;
+  border: 1px solid #cdd9ee;
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: #fff;
+  color: var(--ink);
+  resize: vertical;
+  min-height: 96px;
+  font: inherit;
+}
+
 input:focus,
-select:focus {
+select:focus,
+textarea:focus {
   outline: none;
   border-color: #6ea4ff;
   box-shadow: 0 0 0 3px rgba(39, 122, 255, 0.15);
@@ -308,6 +321,37 @@ th {
 .flash-error {
   background: #ffe8e6;
   border-color: #e4a3a0;
+}
+
+.value-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 0.82rem;
+  font-weight: 800;
+  margin-inline-start: 6px;
+}
+
+.badge-default {
+  background: #eef4ff;
+  color: #1f56b5;
+}
+
+.badge-active {
+  background: #e6f8ef;
+  color: #18794e;
+}
+
+.badge-inactive,
+.badge-t11 {
+  background: #ffe7e5;
+  color: #b3322d;
+}
+
+.badge-t12 {
+  background: #fff0d9;
+  color: #a95a00;
 }
 
 .auth-wrap {
