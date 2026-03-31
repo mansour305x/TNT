@@ -1,59 +1,69 @@
 {% extends "base.html" %}
 {% block content %}
-<section class="hero-card">
-  <h1>{{ 'Registered Members' if lang == 'en' else 'الأعضاء المسجلون' }}</h1>
-  <p>{{ 'All saved members are listed here in a dedicated page separate from the registration form.' if lang == 'en' else 'جميع الأعضاء المحفوظين يظهرون هنا في صفحة مستقلة عن نموذج التسجيل.' }}</p>
-</section>
 
-<section class="panel table-panel">
-  <div class="section-head">
-    <h2>{{ 'Member List' if lang == 'en' else 'قائمة الأعضاء' }}</h2>
-    <a class="btn btn-ghost" href="/portal">{{ 'Back To Registration' if lang == 'en' else 'العودة إلى التسجيل' }}</a>
+<div class="portal-header">
+  <div>
+    <h1 class="portal-title">{{ 'Registered Members' if lang == 'en' else 'الأعضاء المسجلون' }}</h1>
+    <p class="portal-sub">
+      {{ records|length }} {{ 'member(s) in the database' if lang == 'en' else 'عضو في قاعدة البيانات' }}
+    </p>
   </div>
+  <a class="btn btn-ghost" href="/portal">
+    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12l7-7 7 7"/></svg>
+    {{ 'Register Member' if lang == 'en' else 'تسجيل عضو' }}
+  </a>
+</div>
+
+<div class="members-card">
+  {% if records %}
   <div class="table-wrap">
-    <table>
+    <table class="members-table">
       <thead>
         <tr>
-          <th>ID</th>
-          <th>Player ID</th>
-          <th>Current Name</th>
-          <th>Alliance</th>
-          <th>Rank</th>
-          <th>{{ 'Selections' if lang == 'en' else 'الاختيارات' }}</th>
-          <th>Notes</th>
-          <th>{{ 'Created By' if lang == 'en' else 'بواسطة' }}</th>
-          <th>{{ 'Created At' if lang == 'en' else 'الوقت' }}</th>
+          <th class="col-seq">#</th>
+          <th>{{ 'Player ID' if lang == 'en' else 'المعرف' }}</th>
+          <th>{{ 'Current Name' if lang == 'en' else 'الاسم الحالي' }}</th>
+          <th>{{ 'Alliance' if lang == 'en' else 'التحالف' }}</th>
+          <th>{{ 'Rank' if lang == 'en' else 'الرتبة' }}</th>
+          {% for field in fields %}
+          <th>{{ field.label }}</th>
+          {% endfor %}
+          <th>{{ 'Notes' if lang == 'en' else 'ملاحظات' }}</th>
+          <th>{{ 'By' if lang == 'en' else 'بواسطة' }}</th>
+          <th>{{ 'Date' if lang == 'en' else 'التاريخ' }}</th>
         </tr>
       </thead>
       <tbody>
         {% for rec in records %}
-        <tr>
-          <td>{{ rec.id }}</td>
-          <td>{{ rec.member_uid }}</td>
-          <td>{{ rec.member_name }}</td>
+        <tr class="member-row">
+          <td class="col-seq">{{ loop.index }}</td>
+          <td class="uid-cell">{{ rec.member_uid }}</td>
+          <td class="name-cell"><strong>{{ rec.member_name }}</strong></td>
           <td>{{ rec.alliance }}</td>
           <td>{{ rec.rank }}</td>
+          {% for field in fields %}
+          {% set val = rec.dv_by_label.get(field.label, '') %}
           <td>
-            {% if rec.dynamic_values %}
-              {% for item in rec.dynamic_values %}
-              <div>
-                {{ item.label }}:
-                <span class="value-badge {% if item.value == 'Active' %}badge-active{% elif item.value == 'Inactive' %}badge-inactive{% elif item.value == 'T11' %}badge-t11{% elif item.value == 'T12' %}badge-t12{% else %}badge-default{% endif %}">
-                  {{ item.value }}
-                </span>
-              </div>
-              {% endfor %}
-            {% else %}
-              -
-            {% endif %}
+            {% if val %}
+            <span class="value-badge {% if val == 'Active' %}badge-active{% elif val == 'Inactive' %}badge-inactive{% elif val == 'T11' %}badge-t11{% elif val == 'T12' %}badge-t12{% else %}badge-default{% endif %}">{{ val }}</span>
+            {% else %}<span class="null-val">—</span>{% endif %}
           </td>
-          <td>{{ rec.notes or '-' }}</td>
+          {% endfor %}
+          <td class="notes-cell">{{ rec.notes or '—' }}</td>
           <td>{{ rec.username or 'system' }}</td>
-          <td>{{ rec.created_at }}</td>
+          <td class="date-cell">{{ rec.created_at[:10] }}</td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
-</section>
+  {% else %}
+  <div class="empty-state">
+    <div class="empty-icon">👥</div>
+    <p>{{ 'No members have been registered yet.' if lang == 'en' else 'لا يوجد أعضاء مسجلون بعد.' }}</p>
+    <a class="btn btn-primary" href="/portal">{{ 'Register First Member' if lang == 'en' else 'سجل أول عضو' }}</a>
+  </div>
+  {% endif %}
+</div>
+
 {% endblock %}

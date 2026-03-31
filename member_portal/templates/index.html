@@ -1,69 +1,89 @@
 {% extends "base.html" %}
 {% block content %}
-<section class="hero-card">
-  <h1>{{ 'Member Registration' if lang == 'en' else 'تسجيل أعضاء التحالف' }}</h1>
-  <p>{{ 'Register alliance members in one compact row, then review them on the separate members page.' if lang == 'en' else 'سجل أعضاء التحالف في صف واحد مضغوط، ثم راجعهم في صفحة الأعضاء المنفصلة.' }}</p>
-</section>
 
-<section class="panel">
-  <h2>{{ 'Create Member Record' if lang == 'en' else 'إنشاء سجل عضو' }}</h2>
-  <form method="post" action="/records/create" class="member-form-strip-wrap">
-    <div class="member-form-strip">
-      <label class="strip-field">
-        <span>Player ID</span>
-        <input type="text" name="player_id" required />
+<div class="portal-header">
+  <div>
+    <h1 class="portal-title">{{ 'Member Registration' if lang == 'en' else 'تسجيل الأعضاء' }}</h1>
+    <p class="portal-sub">{{ 'Register a new alliance member using the form below.' if lang == 'en' else 'سجّل عضوًا جديدًا في التحالف باستخدام النموذج أدناه.' }}</p>
+  </div>
+  <a class="btn btn-ghost" href="/members">
+    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
+    {{ 'View Members' if lang == 'en' else 'عرض الأعضاء' }}
+  </a>
+</div>
+
+<div class="registration-card">
+  <form method="post" action="/records/create" id="memberForm">
+
+    <div class="reg-section-label">{{ 'Basic Information' if lang == 'en' else 'المعلومات الأساسية' }}</div>
+    <div class="reg-basic-grid">
+      <label class="reg-field">
+        <span class="reg-label">{{ 'Player ID' if lang == 'en' else 'معرف اللاعب' }}</span>
+        <input type="text" name="player_id" required placeholder="e.g. 123456789" />
       </label>
-
-      <label class="strip-field">
-        <span>Current Name</span>
-        <input type="text" name="current_name" required />
+      <label class="reg-field">
+        <span class="reg-label">{{ 'Current Name' if lang == 'en' else 'الاسم الحالي' }}</span>
+        <input type="text" name="current_name" required placeholder="{{ 'In-game name' if lang == 'en' else 'الاسم في اللعبة' }}" />
       </label>
-
-      <label class="strip-field">
-        <span>Alliance</span>
-        <input type="text" name="alliance" required />
+      <label class="reg-field">
+        <span class="reg-label">{{ 'Alliance' if lang == 'en' else 'التحالف' }}</span>
+        <input type="text" name="alliance" required placeholder="{{ 'Alliance tag' if lang == 'en' else 'تاغ التحالف' }}" />
       </label>
-
-      <label class="strip-field">
-        <span>Rank</span>
-        <input type="text" name="rank" required />
+      <label class="reg-field">
+        <span class="reg-label">{{ 'Rank' if lang == 'en' else 'الرتبة' }}</span>
+        <input type="text" name="rank" required placeholder="{{ 'e.g. R4, R5' if lang == 'en' else 'مثال: R4، R5' }}" />
       </label>
+    </div>
 
+    {% if fields %}
+    <div class="reg-section-label">{{ 'Troop Tiers & Status' if lang == 'en' else 'مستويات القوات والحالة' }}</div>
+    <div class="reg-dynamic-strip">
       {% for field in fields %}
-      <div class="field-block strip-field">
-        <label>
-          <span>{{ field.label }}{% if field.is_required %} *{% endif %}</span>
-          <select name="field_{{ field.id }}" {% if field.is_required %}required{% endif %}>
-            <option value="">{{ 'Select' if lang == 'en' else 'اختر' }}</option>
-            {% for option in field.options %}
-            <option value="{{ option.value }}">{{ option.value }}</option>
-            {% endfor %}
-          </select>
-        </label>
-
-        <div class="inline-add">
-          <input type="text" name="value" form="add-option-{{ field.id }}" placeholder="{{ 'Add a new option' if lang == 'en' else 'أضف خيارًا جديدًا' }}" required />
-          <button class="btn" type="submit" form="add-option-{{ field.id }}">{{ 'Add' if lang == 'en' else 'إضافة' }}</button>
+      <div class="reg-field-card">
+        <div class="reg-field-card-header">
+          <span class="reg-label">{{ field.label }}{% if field.is_required %}<span class="req-star"> *</span>{% endif %}</span>
+          <button class="add-opt-btn" type="button" onclick="toggleAddOpt({{ field.id }})">
+            + {{ 'Add' if lang == 'en' else 'إضافة' }}
+          </button>
+        </div>
+        <select name="field_{{ field.id }}" {% if field.is_required %}required{% endif %} class="reg-select">
+          <option value="">— {{ 'Select' if lang == 'en' else 'اختر' }} —</option>
+          {% for option in field.options %}
+          <option value="{{ option.value }}">{{ option.value }}</option>
+          {% endfor %}
+        </select>
+        <div class="add-opt-row" id="addOptRow{{ field.id }}" style="display:none;">
+          <input type="text" name="value" form="add-option-{{ field.id }}" placeholder="{{ 'New option…' if lang == 'en' else 'خيار جديد…' }}" required />
+          <button class="btn" type="submit" form="add-option-{{ field.id }}">{{ 'Save' if lang == 'en' else 'حفظ' }}</button>
         </div>
       </div>
       {% endfor %}
+    </div>
+    {% endif %}
 
-      <label class="strip-field strip-field-notes">
-        <span>Notes</span>
-        <textarea name="notes" rows="4" placeholder="{{ 'Write any notes here' if lang == 'en' else 'اكتب أي ملاحظات هنا' }}"></textarea>
-      </label>
+    <div class="reg-section-label">{{ 'Notes' if lang == 'en' else 'ملاحظات' }}</div>
+    <textarea name="notes" class="reg-notes" rows="3" placeholder="{{ 'Optional notes about this member…' if lang == 'en' else 'ملاحظات اختيارية عن هذا العضو…' }}"></textarea>
+
+    <div class="reg-actions">
+      <button class="btn btn-primary reg-submit" type="submit">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>
+        {{ 'Save Member Record' if lang == 'en' else 'حفظ سجل العضو' }}
+      </button>
     </div>
 
-    <div class="member-form-actions">
-      <button class="btn btn-primary" type="submit">{{ 'Save Member Record' if lang == 'en' else 'حفظ سجل العضو' }}</button>
-      <a class="btn btn-ghost" href="/members">{{ 'View Registered Members' if lang == 'en' else 'عرض الأعضاء المسجلين' }}</a>
-    </div>
   </form>
+</div>
 
-  {% for field in fields %}
-  <form id="add-option-{{ field.id }}" method="post" action="/options/contribute" class="hidden-submit-form">
-    <input type="hidden" name="field_id" value="{{ field.id }}" />
-  </form>
-  {% endfor %}
-</section>
+{% for field in fields %}
+<form id="add-option-{{ field.id }}" method="post" action="/options/contribute" class="hidden-submit-form">
+  <input type="hidden" name="field_id" value="{{ field.id }}" />
+</form>
+{% endfor %}
+
+<script>
+function toggleAddOpt(id) {
+  var row = document.getElementById('addOptRow' + id);
+  if (row) row.style.display = row.style.display === 'none' ? 'flex' : 'none';
+}
+</script>
 {% endblock %}

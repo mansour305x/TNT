@@ -5,6 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>{{ title }}</title>
   <link rel="stylesheet" href="/static/styles.css" />
+  <script>
+    (function () {
+      var t = localStorage.getItem('tnt-theme') || 'light';
+      document.documentElement.setAttribute('data-theme', t);
+    })();
+  </script>
 </head>
 <body>
   <div class="page-bg" aria-hidden="true"></div>
@@ -20,22 +26,53 @@
 
     <nav class="nav-links">
       {% if current_user %}
-      <a href="/portal">{{ tr('portal_title').split('|')[1].strip() if '|' in tr('portal_title') else tr('portal_title') }}</a>
-      <a href="/members">{{ tr('members_title').split('|')[1].strip() if '|' in tr('members_title') else tr('members_title') }}</a>
+      <a class="nav-link" href="/portal">{{ 'Registration' if lang == 'en' else 'التسجيل' }}</a>
+      <a class="nav-link" href="/members">{{ 'Members' if lang == 'en' else 'الأعضاء' }}</a>
       {% if current_user.is_admin %}
-      <a href="/dashboard">{{ 'لوحة التحكم' if lang == 'ar' else 'Dashboard' }}</a>
+      <a class="nav-link" href="/dashboard">{{ 'Dashboard' if lang == 'en' else 'لوحة التحكم' }}</a>
       {% endif %}
-      <span class="user-chip">@{{ current_user.username }}</span>
-      <a class="btn btn-ghost" href="/logout">{{ 'خروج' if lang == 'ar' else 'Logout' }}</a>
+
+      <div class="profile-nav" id="profileNav">
+        <button class="profile-trigger" onclick="toggleProfile()" type="button">
+          <span class="profile-avatar-sm">{{ current_user.username[0] | upper }}</span>
+          <span class="profile-trigger-name">{{ current_user.username }}</span>
+          <svg class="chevron-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+        <div class="profile-dropdown">
+          <div class="profile-info-block">
+            <div class="profile-avatar-lg">{{ current_user.username[0] | upper }}</div>
+            <div class="profile-info-text">
+              <div class="profile-username">{{ current_user.username }}</div>
+              {% if current_user.state %}
+              <div class="profile-meta">📍 {{ current_user.state }}</div>
+              {% endif %}
+              <div class="profile-meta">{{ 'Since' if lang == 'en' else 'عضو منذ' }} {{ current_user.created_at[:10] }}</div>
+              {% if current_user.is_admin %}
+              <span class="profile-admin-badge">Admin</span>
+              {% endif %}
+            </div>
+          </div>
+          <div class="profile-dropdown-footer">
+            <a class="btn btn-ghost profile-logout" href="/logout">
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg>
+              {{ 'Logout' if lang == 'en' else 'تسجيل الخروج' }}
+            </a>
+          </div>
+        </div>
+      </div>
       {% endif %}
 
       <form method="post" action="/set-language" class="lang-form">
         <input type="hidden" name="next" value="{{ request_path if request_path else ('/portal' if current_user else '/') }}" />
         <select name="lang" aria-label="Language" onchange="this.form.submit()">
-          <option value="en" {% if lang == 'en' %}selected{% endif %}>English</option>
-          <option value="ar" {% if lang == 'ar' %}selected{% endif %}>العربية</option>
+          <option value="en" {% if lang == 'en' %}selected{% endif %}>EN</option>
+          <option value="ar" {% if lang == 'ar' %}selected{% endif %}>AR</option>
         </select>
       </form>
+
+      <button class="theme-toggle-btn" id="themeToggle" onclick="toggleTheme()" type="button" title="{{ 'Toggle theme' if lang == 'en' else 'تغيير المظهر' }}">
+        <span id="themeIcon">🌙</span>
+      </button>
     </nav>
   </header>
 
@@ -46,5 +83,32 @@
   <main class="container">
     {% block content %}{% endblock %}
   </main>
+
+  <script>
+    (function () {
+      var t = localStorage.getItem('tnt-theme') || 'light';
+      var icon = document.getElementById('themeIcon');
+      if (icon) icon.textContent = t === 'dark' ? '☀️' : '🌙';
+    })();
+
+    function toggleTheme() {
+      var current = document.documentElement.getAttribute('data-theme') || 'light';
+      var next = current === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', next);
+      localStorage.setItem('tnt-theme', next);
+      var icon = document.getElementById('themeIcon');
+      if (icon) icon.textContent = next === 'dark' ? '☀️' : '🌙';
+    }
+
+    function toggleProfile() {
+      var nav = document.getElementById('profileNav');
+      if (nav) nav.classList.toggle('open');
+    }
+
+    document.addEventListener('click', function (e) {
+      var nav = document.getElementById('profileNav');
+      if (nav && !nav.contains(e.target)) nav.classList.remove('open');
+    });
+  </script>
 </body>
 </html>

@@ -10,6 +10,18 @@
   --shadow: 0 14px 35px rgba(15, 38, 74, 0.08);
 }
 
+:root[data-theme="dark"] {
+  --bg: #101723;
+  --card: #172233;
+  --ink: #e8f0ff;
+  --muted: #9db0cf;
+  --line: #2a3c59;
+  --primary: #5b9bff;
+  --primary-2: #77b3ff;
+  --danger: #e56d68;
+  --shadow: 0 16px 30px rgba(0, 0, 0, 0.34);
+}
+
 * {
   box-sizing: border-box;
 }
@@ -17,7 +29,7 @@
 body {
   margin: 0;
   color: var(--ink);
-  background: linear-gradient(180deg, #f8fbff 0%, #f1f6fd 100%);
+  background: var(--bg);
   font-family: "Segoe UI", Tahoma, sans-serif;
 }
 
@@ -37,7 +49,7 @@ body {
   justify-content: space-between;
   gap: 12px;
   padding: 12px 4vw;
-  background: rgba(248, 251, 255, 0.88);
+  background: color-mix(in srgb, var(--card) 86%, transparent);
   border-bottom: 1px solid var(--line);
   backdrop-filter: blur(8px);
   position: sticky;
@@ -96,16 +108,29 @@ body {
 }
 
 .nav-links a:hover {
-  background: #f0f5ff;
-  border-color: #d4e2fb;
+  background: color-mix(in srgb, var(--primary) 14%, transparent);
+  border-color: color-mix(in srgb, var(--primary) 36%, transparent);
 }
 
 .user-chip {
   border-radius: 999px;
   border: 1px solid var(--line);
-  background: #fff;
+  background: var(--card);
   padding: 6px 10px;
   font-size: 0.85rem;
+}
+
+.profile-chip {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-decoration: none;
+  color: var(--ink);
+}
+
+.profile-chip small {
+  color: var(--muted);
+  font-size: 0.72rem;
 }
 
 .lang-form {
@@ -113,7 +138,7 @@ body {
   align-items: center;
   gap: 6px;
   border: 1px solid var(--line);
-  background: #fff;
+  background: var(--card);
   border-radius: 10px;
   padding: 4px;
 }
@@ -121,7 +146,7 @@ body {
 .lang-form select {
   border: 1px solid #cfdbef;
   border-radius: 8px;
-  background: #fff;
+  background: var(--card);
   color: var(--ink);
   height: 34px;
   padding: 0 8px;
@@ -139,6 +164,14 @@ body {
   padding: 24px;
   box-shadow: var(--shadow);
   margin-bottom: 16px;
+}
+
+.hero-royal {
+  background:
+    radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.32), transparent 30%),
+    linear-gradient(130deg, #071f46 0%, #114396 45%, #2578ff 100%);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  box-shadow: 0 22px 48px rgba(5, 17, 47, 0.45);
 }
 
 .hero-card h1 {
@@ -198,7 +231,7 @@ body {
 }
 
 .strip-field-notes {
-  grid-auto-columns: 280px;
+  min-width: 280px;
 }
 
 .member-form-actions {
@@ -241,7 +274,7 @@ select {
   border-radius: 10px;
   height: 42px;
   padding: 0 12px;
-  background: #fff;
+  background: var(--card);
   color: var(--ink);
 }
 
@@ -250,7 +283,7 @@ textarea {
   border: 1px solid #cdd9ee;
   border-radius: 10px;
   padding: 10px 12px;
-  background: #fff;
+  background: var(--card);
   color: var(--ink);
   resize: vertical;
   min-height: 96px;
@@ -269,7 +302,7 @@ textarea:focus {
   border: 1px solid #e1e9f7;
   border-radius: 12px;
   padding: 10px;
-  background: #f9fbff;
+  background: color-mix(in srgb, var(--card) 90%, #f9fbff);
   align-self: start;
 }
 
@@ -280,6 +313,17 @@ textarea:focus {
   gap: 8px;
 }
 
+.inline-selection-cell {
+  white-space: nowrap;
+}
+
+.inline-selection-item {
+  display: inline-flex;
+  align-items: center;
+  margin-inline-end: 6px;
+  margin-bottom: 4px;
+}
+
 .hidden-submit-form {
   display: none;
 }
@@ -287,7 +331,7 @@ textarea:focus {
 .btn {
   border: 1px solid #cad9f4;
   border-radius: 10px;
-  background: #f4f8ff;
+  background: color-mix(in srgb, var(--card) 88%, #f4f8ff);
   color: var(--ink);
   height: 40px;
   padding: 0 12px;
@@ -302,13 +346,17 @@ textarea:focus {
 }
 
 .btn-ghost {
-  background: #fff;
+  background: var(--card);
 }
 
 .btn-danger {
   border: 0;
   background: var(--danger);
   color: #fff;
+}
+
+.theme-toggle {
+  min-width: 84px;
 }
 
 .table-wrap {
@@ -330,7 +378,7 @@ td {
 }
 
 th {
-  background: #f3f7ff;
+  background: color-mix(in srgb, var(--card) 70%, #e8f1ff);
 }
 
 .flash {
@@ -393,6 +441,401 @@ th {
   gap: 16px;
 }
 
+.auth-panel-single {
+  width: min(520px, 100%);
+}
+
+.register-link-line {
+  margin: 14px 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.register-link-line a {
+  color: var(--primary);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+/* ━━━━━━━━━━━━━━━━  UTILITY  ━━━━━━━━━━━━━━━━ */
+.full-btn { width: 100%; justify-content: center; }
+.null-val { color: var(--muted); }
+.req-star { color: var(--danger); }
+
+/* Override btn to support icon alignment */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+/* ━━━━━━━━━━━━━━━━  THEME TOGGLE  ━━━━━━━━━━━━━━━━ */
+.theme-toggle-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  font-size: 1rem;
+  color: var(--ink);
+  flex-shrink: 0;
+}
+.theme-toggle-btn:hover {
+  background: color-mix(in srgb, var(--primary) 10%, var(--card));
+}
+
+/* ━━━━━━━━━━━━━━━━  PROFILE DROPDOWN  ━━━━━━━━━━━━━━━━ */
+.profile-nav { position: relative; }
+
+.profile-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  cursor: pointer;
+  color: var(--ink);
+  font-weight: 700;
+  font-size: 0.88rem;
+  font-family: inherit;
+}
+.profile-trigger:hover { background: color-mix(in srgb, var(--primary) 10%, var(--card)); }
+
+.profile-avatar-sm {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--primary), var(--primary-2));
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 900;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.chevron-icon { transition: transform 0.2s; }
+.profile-nav.open .chevron-icon { transform: rotate(180deg); }
+
+.profile-trigger-name {
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-dropdown {
+  display: none;
+  position: absolute;
+  top: calc(100% + 8px);
+  inset-inline-end: 0;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 16px;
+  min-width: 240px;
+  box-shadow: var(--shadow);
+  z-index: 200;
+}
+.profile-nav.open .profile-dropdown { display: block; }
+
+.profile-info-block {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.profile-avatar-lg {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  flex-shrink: 0;
+  background: linear-gradient(135deg, var(--primary), var(--primary-2));
+  color: #fff;
+  font-size: 1.4rem;
+  font-weight: 900;
+  display: grid;
+  place-items: center;
+}
+
+.profile-info-text { min-width: 0; }
+.profile-username { font-weight: 800; font-size: 0.97rem; }
+.profile-meta { color: var(--muted); font-size: 0.8rem; margin-top: 2px; }
+
+.profile-admin-badge {
+  display: inline-block;
+  margin-top: 5px;
+  background: linear-gradient(120deg, var(--primary), var(--primary-2));
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 800;
+  padding: 1px 8px;
+  border-radius: 999px;
+}
+
+.profile-dropdown-footer { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
+.profile-logout { width: 100%; justify-content: center; color: var(--ink); text-decoration: none; }
+
+/* ━━━━━━━━━━━━━━━━  TNT GRAND LOGO  ━━━━━━━━━━━━━━━━ */
+.auth-center-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 32px 0 48px;
+  gap: 24px;
+}
+
+.tnt-logo-hero { text-align: center; }
+
+.tnt-logo-outer-ring {
+  display: inline-block;
+  padding: 6px;
+  border-radius: 38px;
+  background: linear-gradient(135deg, rgba(31, 109, 255, 0.28), rgba(76, 181, 255, 0.1));
+  box-shadow: 0 0 0 1px rgba(31, 109, 255, 0.25), 0 24px 64px rgba(31, 109, 255, 0.22);
+  margin: 0 auto 20px;
+}
+
+.tnt-logo-badge-xl {
+  width: 108px;
+  height: 108px;
+  border-radius: 30px;
+  background: linear-gradient(145deg, #082459 0%, #1557d9 50%, #3ea8ff 100%);
+  box-shadow:
+    0 10px 32px rgba(31, 109, 255, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    inset 0 -2px 6px rgba(0, 0, 0, 0.25);
+  display: grid;
+  place-items: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.tnt-logo-badge-xl::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 35% 28%, rgba(255, 255, 255, 0.38), transparent 55%);
+}
+
+.tnt-logo-text {
+  font-size: 2.2rem;
+  font-weight: 900;
+  color: #fff;
+  letter-spacing: 0.1em;
+  position: relative;
+  z-index: 1;
+  text-shadow: 0 3px 10px rgba(0, 0, 0, 0.4);
+}
+
+.tnt-logo-title {
+  font-size: 2.1rem;
+  font-weight: 900;
+  color: var(--ink);
+  margin: 0;
+  letter-spacing: -0.025em;
+}
+
+.tnt-logo-subtitle {
+  color: var(--muted);
+  margin: 6px 0 0;
+  font-size: 1rem;
+}
+
+.tnt-stars {
+  color: #f5c400;
+  letter-spacing: 0.25em;
+  font-size: 0.95rem;
+  margin-top: 10px;
+}
+
+.auth-panel-single { width: min(460px, 100%); }
+.auth-panel-title { margin-top: 0; font-size: 1.2rem; }
+
+/* ━━━━━━━━━━━━━━━━  PORTAL HEADER  ━━━━━━━━━━━━━━━━ */
+.portal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.portal-title { margin: 0; font-size: 1.5rem; font-weight: 900; }
+.portal-sub { margin: 4px 0 0; color: var(--muted); font-size: 0.9rem; }
+
+/* ━━━━━━━━━━━━━━━━  REGISTRATION CARD  ━━━━━━━━━━━━━━━━ */
+.registration-card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 24px 28px;
+  box-shadow: var(--shadow);
+}
+
+.reg-section-label {
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--primary);
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--line);
+}
+
+.reg-basic-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 22px;
+}
+
+.reg-field { display: flex; flex-direction: column; gap: 6px; }
+.reg-label { color: var(--muted); font-size: 0.83rem; font-weight: 700; }
+
+.reg-dynamic-strip {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(170px, 210px);
+  gap: 12px;
+  overflow-x: auto;
+  padding-bottom: 10px;
+  margin-bottom: 22px;
+  scrollbar-width: thin;
+}
+
+.reg-field-card {
+  background: color-mix(in srgb, var(--card) 65%, var(--bg));
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.reg-field-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.add-opt-btn {
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: var(--primary);
+  background: none;
+  border: 1px solid color-mix(in srgb, var(--primary) 40%, transparent);
+  border-radius: 6px;
+  padding: 2px 7px;
+  cursor: pointer;
+  white-space: nowrap;
+  font-family: inherit;
+}
+.add-opt-btn:hover { background: color-mix(in srgb, var(--primary) 12%, transparent); }
+
+.reg-select { height: 40px; }
+
+.add-opt-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.add-opt-row input { height: 36px; font-size: 0.85rem; flex: 1; min-width: 0; }
+.add-opt-row .btn { height: 36px; font-size: 0.82rem; padding: 0 10px; white-space: nowrap; flex-shrink: 0; }
+
+.reg-notes {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: var(--card);
+  color: var(--ink);
+  resize: vertical;
+  min-height: 80px;
+  font: inherit;
+  margin-bottom: 20px;
+  box-sizing: border-box;
+}
+.reg-notes:focus { outline: none; border-color: #6ea4ff; box-shadow: 0 0 0 3px rgba(39, 122, 255, 0.15); }
+
+.reg-actions { display: flex; justify-content: flex-end; }
+.reg-submit { display: inline-flex; align-items: center; gap: 8px; }
+
+/* ━━━━━━━━━━━━━━━━  MEMBERS TABLE CARD  ━━━━━━━━━━━━━━━━ */
+.members-card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+
+.members-table { width: 100%; border-collapse: collapse; min-width: 700px; }
+
+.members-table th {
+  background: color-mix(in srgb, var(--bg) 60%, var(--card));
+  padding: 11px 12px;
+  border-bottom: 1.5px solid var(--line);
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  color: var(--muted);
+}
+
+.members-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: middle;
+}
+
+.member-row:last-child td { border-bottom: none; }
+.member-row:hover td { background: color-mix(in srgb, var(--primary) 4%, var(--card)); }
+
+.col-seq { width: 42px; text-align: center; color: var(--muted); font-size: 0.82rem; }
+.uid-cell { font-family: monospace; font-size: 0.88rem; color: var(--muted); }
+.name-cell strong { font-weight: 700; }
+.notes-cell { max-width: 180px; font-size: 0.85rem; color: var(--muted); }
+.date-cell { white-space: nowrap; color: var(--muted); font-size: 0.82rem; }
+
+.empty-state {
+  text-align: center;
+  padding: 64px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+.empty-icon { font-size: 3rem; }
+
+/* ━━━━━━━━━━━━━━━━  NAV LINK  ━━━━━━━━━━━━━━━━ */
+.nav-link {
+  text-decoration: none;
+  color: var(--ink);
+  font-weight: 700;
+  padding: 7px 12px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  font-size: 0.9rem;
+}
+.nav-link:hover {
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+  border-color: color-mix(in srgb, var(--primary) 30%, transparent);
+}
+
+/* ━━━━━━━━━━━━━━━━  RESPONSIVE  ━━━━━━━━━━━━━━━━ */
 @media (max-width: 920px) {
   .layout,
   .auth-grid,
@@ -414,4 +857,16 @@ th {
     align-items: stretch;
     flex-direction: column;
   }
+
+  .reg-basic-grid { grid-template-columns: 1fr 1fr; }
+  .portal-header { flex-direction: column; align-items: flex-start; }
+  .reg-actions { justify-content: stretch; }
+  .reg-submit { width: 100%; }
+}
+
+@media (max-width: 560px) {
+  .reg-basic-grid { grid-template-columns: 1fr; }
+  .tnt-logo-badge-xl { width: 88px; height: 88px; border-radius: 24px; }
+  .tnt-logo-text { font-size: 1.8rem; }
+  .tnt-logo-title { font-size: 1.7rem; }
 }

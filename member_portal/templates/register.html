@@ -14,23 +14,27 @@
   </div>
 
   <div class="auth-panel-single panel">
-    <h2 class="auth-panel-title">{{ 'Sign In' if lang == 'en' else 'تسجيل الدخول' }}</h2>
-    <form method="post" action="/login" class="stacked">
+    <h2 class="auth-panel-title">{{ 'Create Account' if lang == 'en' else 'إنشاء حساب' }}</h2>
+    <form method="post" action="/register" class="stacked">
       <label>
         <span>{{ 'Username' if lang == 'en' else 'اسم المستخدم' }}</span>
         <input type="text" name="username" autocomplete="username" required />
       </label>
       <label>
         <span>{{ 'Password' if lang == 'en' else 'كلمة المرور' }}</span>
-        <input type="password" name="password" autocomplete="current-password" required />
+        <input type="password" name="password" autocomplete="new-password" required />
+      </label>
+      <label>
+        <span>{{ 'State / Province' if lang == 'en' else 'الولاية / المنطقة' }}</span>
+        <input type="text" name="state" placeholder="{{ 'e.g. Riyadh, Cairo…' if lang == 'en' else 'مثال: الرياض، القاهرة…' }}" />
       </label>
       <button class="btn btn-primary full-btn" type="submit">
-        {{ 'Sign In' if lang == 'en' else 'دخول' }}
+        {{ 'Create Account' if lang == 'en' else 'إنشاء الحساب' }}
       </button>
     </form>
     <p class="register-link-line">
-      {{ "Don't have an account?" if lang == 'en' else 'ليس لديك حساب؟' }}
-      <a href="/register-page">{{ 'Create one' if lang == 'en' else 'إنشاء حساب' }}</a>
+      {{ 'Already have an account?' if lang == 'en' else 'لديك حساب بالفعل؟' }}
+      <a href="/">{{ 'Sign In' if lang == 'en' else 'تسجيل الدخول' }}</a>
     </p>
   </div>
 

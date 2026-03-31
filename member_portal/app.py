@@ -203,6 +203,7 @@ def init_db() -> None:
         )
         migrate_member_record_columns(conn)
         ensure_default_dropdown_fields(conn)
+        migrate_user_state_column(conn)
 
 
 def migrate_member_record_columns(conn: sqlite3.Connection) -> None:
@@ -215,6 +216,12 @@ def migrate_member_record_columns(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE member_records ADD COLUMN rank TEXT NOT NULL DEFAULT ''")
     if "notes" not in columns:
         conn.execute("ALTER TABLE member_records ADD COLUMN notes TEXT NOT NULL DEFAULT ''")
+
+
+def migrate_user_state_column(conn: sqlite3.Connection) -> None:
+    columns = {row["name"] for row in conn.execute("PRAGMA table_info(users)").fetchall()}
+    if "state" not in columns:
+        conn.execute("ALTER TABLE users ADD COLUMN state TEXT NOT NULL DEFAULT ''")
 
 
 def ensure_default_dropdown_fields(conn: sqlite3.Connection) -> None:
@@ -319,7 +326,7 @@ def get_current_user(request: web.Request) -> dict[str, Any] | None:
 
     with get_db() as conn:
         row = conn.execute(
-            "SELECT id, username, is_admin, created_at FROM users WHERE id = ?",
+            "SELECT id, username, is_admin, created_at, state FROM users WHERE id = ?",
             (user_id,),
         ).fetchone()
 
@@ -412,6 +419,19 @@ async def auth_page(request: web.Request) -> web.Response:
     )
 
 
+async def register_page(request: web.Request) -> web.Response:
+    if get_current_user(request):
+        raise web.HTTPFound(location="/portal")
+    lang = get_lang(request)
+    return render_template(
+        request,
+        "register.html",
+        {
+            "title": "TNT Alliance | Register" if lang == "en" else "تحالف TNT | التسجيل",
+        },
+    )
+
+
 async def portal_page(request: web.Request) -> web.Response:
     user = get_current_user(request)
     if not user:
@@ -436,6 +456,7 @@ async def members_page(request: web.Request) -> web.Response:
         return flash_response("/", translate_request(request, "login_required"), "error")
 
     with get_db() as conn:
+        fields = fetch_fields_and_options(conn)
         records = conn.execute(
             """
             SELECT r.id, r.member_name, r.member_uid, r.alliance, r.rank, r.notes, r.created_at, u.username
@@ -462,7 +483,9 @@ async def members_page(request: web.Request) -> web.Response:
         )
 
     for rec in records_list:
-        rec["dynamic_values"] = values_by_record.get(rec["id"], [])
+        dv_list = values_by_record.get(rec["id"], [])
+        rec["dynamic_values"] = dv_list
+        rec["dv_by_label"] = {item["label"]: item["value"] for item in dv_list}
 
     return render_template(
         request,
@@ -470,6 +493,7 @@ async def members_page(request: web.Request) -> web.Response:
         {
             "title": translate_request(request, "members_title"),
             "records": records_list,
+            "fields": fields,
         },
     )
 
@@ -491,18 +515,19 @@ async def register_user(request: web.Request) -> web.StreamResponse:
     data = await request.post()
     username = str(data.get("username", "")).strip()
     password = str(data.get("password", "")).strip()
+    state = str(data.get("state", "")).strip()
 
     if len(username) < 3 or len(password) < 6:
-        return flash_response("/", translate_request(request, "username_password_min"), "error")
+        return flash_response("/register-page", translate_request(request, "username_password_min"), "error")
 
     with get_db() as conn:
         try:
             conn.execute(
-                "INSERT INTO users (username, password_hash, is_admin) VALUES (?, ?, 0)",
-                (username, hash_password(password)),
+                "INSERT INTO users (username, password_hash, is_admin, state) VALUES (?, ?, 0, ?)",
+                (username, hash_password(password), state),
             )
         except sqlite3.IntegrityError:
-            return flash_response("/", translate_request(request, "username_exists"), "error")
+            return flash_response("/register-page", translate_request(request, "username_exists"), "error")
 
     return flash_response("/", translate_request(request, "account_created"), "success")
 
@@ -725,6 +750,7 @@ def build_app() -> web.Application:
     app.router.add_static("/static/", path=str(STATIC_DIR), name="static")
 
     app.router.add_get("/", auth_page)
+    app.router.add_get("/register-page", register_page)
     app.router.add_get("/portal", portal_page)
     app.router.add_get("/members", members_page)
 
