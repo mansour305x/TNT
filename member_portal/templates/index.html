@@ -1,40 +1,40 @@
 {% extends "base.html" %}
 {% block content %}
 <section class="hero-card">
-  <h1>تسجيل أعضاء التحالف</h1>
-  <p>كل شيء داخل الصفحة: إدخال بيانات العضو، اختيار القيم، وإضافة خيارات جديدة بسرعة.</p>
+  <h1>{{ 'Member Registration' if lang == 'en' else 'تسجيل أعضاء التحالف' }}</h1>
+  <p>{{ 'Register alliance members in one compact row, then review them on the separate members page.' if lang == 'en' else 'سجل أعضاء التحالف في صف واحد مضغوط، ثم راجعهم في صفحة الأعضاء المنفصلة.' }}</p>
 </section>
 
-<div class="layout">
-  <section class="panel">
-    <h2>Create Member Record</h2>
-    <form method="post" action="/records/create" class="stacked">
-      <label>
+<section class="panel">
+  <h2>{{ 'Create Member Record' if lang == 'en' else 'إنشاء سجل عضو' }}</h2>
+  <form method="post" action="/records/create" class="member-form-strip-wrap">
+    <div class="member-form-strip">
+      <label class="strip-field">
         <span>Player ID</span>
         <input type="text" name="player_id" required />
       </label>
 
-      <label>
+      <label class="strip-field">
         <span>Current Name</span>
         <input type="text" name="current_name" required />
       </label>
 
-      <label>
+      <label class="strip-field">
         <span>Alliance</span>
         <input type="text" name="alliance" required />
       </label>
 
-      <label>
+      <label class="strip-field">
         <span>Rank</span>
         <input type="text" name="rank" required />
       </label>
 
       {% for field in fields %}
-      <div class="field-block">
+      <div class="field-block strip-field">
         <label>
           <span>{{ field.label }}{% if field.is_required %} *{% endif %}</span>
           <select name="field_{{ field.id }}" {% if field.is_required %}required{% endif %}>
-            <option value="">اختر</option>
+            <option value="">{{ 'Select' if lang == 'en' else 'اختر' }}</option>
             {% for option in field.options %}
             <option value="{{ option.value }}">{{ option.value }}</option>
             {% endfor %}
@@ -42,74 +42,28 @@
         </label>
 
         <div class="inline-add">
-          <input type="text" name="value" form="add-option-{{ field.id }}" placeholder="أضف خيار جديد لهذا الحقل" required />
-          <button class="btn" type="submit" form="add-option-{{ field.id }}">إضافة</button>
+          <input type="text" name="value" form="add-option-{{ field.id }}" placeholder="{{ 'Add a new option' if lang == 'en' else 'أضف خيارًا جديدًا' }}" required />
+          <button class="btn" type="submit" form="add-option-{{ field.id }}">{{ 'Add' if lang == 'en' else 'إضافة' }}</button>
         </div>
       </div>
       {% endfor %}
 
-      <label>
+      <label class="strip-field strip-field-notes">
         <span>Notes</span>
-        <textarea name="notes" rows="4" placeholder="Write any notes here"></textarea>
+        <textarea name="notes" rows="4" placeholder="{{ 'Write any notes here' if lang == 'en' else 'اكتب أي ملاحظات هنا' }}"></textarea>
       </label>
-
-      <button class="btn btn-primary" type="submit">حفظ سجل العضو</button>
-    </form>
-
-    {% for field in fields %}
-    <form id="add-option-{{ field.id }}" method="post" action="/options/contribute" class="hidden-submit-form">
-      <input type="hidden" name="field_id" value="{{ field.id }}" />
-    </form>
-    {% endfor %}
-  </section>
-
-  <section class="panel table-panel">
-    <h2>آخر السجلات</h2>
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>ID</th>
-            <th>Player ID</th>
-            <th>Current Name</th>
-            <th>Alliance</th>
-            <th>Rank</th>
-            <th>الاختيارات</th>
-            <th>Notes</th>
-            <th>بواسطة</th>
-            <th>الوقت</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for rec in records %}
-          <tr>
-            <td>{{ rec.id }}</td>
-            <td>{{ rec.member_uid }}</td>
-            <td>{{ rec.member_name }}</td>
-            <td>{{ rec.alliance }}</td>
-            <td>{{ rec.rank }}</td>
-            <td>
-              {% if rec.dynamic_values %}
-                {% for item in rec.dynamic_values %}
-                <div>
-                  {{ item.label }}:
-                  <span class="value-badge {% if item.value == 'Active' %}badge-active{% elif item.value == 'Inactive' %}badge-inactive{% elif item.value == 'T11' %}badge-t11{% elif item.value == 'T12' %}badge-t12{% else %}badge-default{% endif %}">
-                    {{ item.value }}
-                  </span>
-                </div>
-                {% endfor %}
-              {% else %}
-                -
-              {% endif %}
-            </td>
-            <td>{{ rec.notes or '-' }}</td>
-            <td>{{ rec.username or 'system' }}</td>
-            <td>{{ rec.created_at }}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
     </div>
-  </section>
-</div>
+
+    <div class="member-form-actions">
+      <button class="btn btn-primary" type="submit">{{ 'Save Member Record' if lang == 'en' else 'حفظ سجل العضو' }}</button>
+      <a class="btn btn-ghost" href="/members">{{ 'View Registered Members' if lang == 'en' else 'عرض الأعضاء المسجلين' }}</a>
+    </div>
+  </form>
+
+  {% for field in fields %}
+  <form id="add-option-{{ field.id }}" method="post" action="/options/contribute" class="hidden-submit-form">
+    <input type="hidden" name="field_id" value="{{ field.id }}" />
+  </form>
+  {% endfor %}
+</section>
 {% endblock %}

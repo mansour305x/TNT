@@ -1,70 +1,70 @@
 {% extends "base.html" %}
 {% block content %}
-<section class="hero">
-  <h1>Control Panel</h1>
-  <p>Manage dynamic dropdown fields and options used in the registration form.</p>
+<section class="hero-card">
+  <h1>{{ 'Control Panel' if lang == 'en' else 'لوحة التحكم' }}</h1>
+  <p>{{ 'Manage dropdown fields and options used in the registration form.' if lang == 'en' else 'إدارة الحقول المنسدلة والخيارات المستخدمة في نموذج التسجيل.' }}</p>
 </section>
 
 <div class="layout">
   <section class="panel">
-    <h2>Add Dropdown Field</h2>
+    <h2>{{ 'Add Dropdown Field' if lang == 'en' else 'إضافة حقل منسدل' }}</h2>
     <form method="post" action="/dashboard/fields" class="form-grid">
       <label>
-        <span>Label</span>
+        <span>{{ 'Label' if lang == 'en' else 'الاسم' }}</span>
         <input type="text" name="label" required />
       </label>
       <label>
-        <span>Key (unique)</span>
+        <span>{{ 'Key (unique)' if lang == 'en' else 'المفتاح الفريد' }}</span>
         <input type="text" name="field_key" required />
       </label>
       <label>
-        <span>Sort Order</span>
+        <span>{{ 'Sort Order' if lang == 'en' else 'ترتيب العرض' }}</span>
         <input type="number" name="sort_order" value="100" />
       </label>
       <label class="inline-check">
-        <input type="checkbox" name="is_required" /> Required
+        <input type="checkbox" name="is_required" /> {{ 'Required' if lang == 'en' else 'مطلوب' }}
       </label>
-      <button class="btn btn-primary" type="submit">Add Field</button>
+      <button class="btn btn-primary" type="submit">{{ 'Add Field' if lang == 'en' else 'إضافة الحقل' }}</button>
     </form>
   </section>
 
   <section class="panel">
-    <h2>Add Option (Admin)</h2>
+    <h2>{{ 'Add Option (Admin)' if lang == 'en' else 'إضافة خيار عبر الأدمن' }}</h2>
     <form method="post" action="/dashboard/options" class="form-grid">
       <label>
-        <span>Field</span>
+        <span>{{ 'Field' if lang == 'en' else 'الحقل' }}</span>
         <select name="field_id" required>
-          <option value="">Select field</option>
+          <option value="">{{ 'Select field' if lang == 'en' else 'اختر الحقل' }}</option>
           {% for field in fields %}
           <option value="{{ field.id }}">{{ field.label }}</option>
           {% endfor %}
         </select>
       </label>
       <label>
-        <span>Option Value</span>
+        <span>{{ 'Option Value' if lang == 'en' else 'قيمة الخيار' }}</span>
         <input type="text" name="value" required />
       </label>
       <label>
-        <span>Sort Order</span>
+        <span>{{ 'Sort Order' if lang == 'en' else 'ترتيب العرض' }}</span>
         <input type="number" name="sort_order" value="100" />
       </label>
-      <button class="btn" type="submit">Add Option</button>
+      <button class="btn" type="submit">{{ 'Add Option' if lang == 'en' else 'إضافة الخيار' }}</button>
     </form>
   </section>
 </div>
 
 <section class="panel table-panel">
-  <h2>Current Dropdown Setup</h2>
+  <h2>{{ 'Current Dropdown Setup' if lang == 'en' else 'إعداد القوائم الحالي' }}</h2>
   <div class="table-wrap">
     <table>
       <thead>
         <tr>
           <th>#</th>
-          <th>Field</th>
-          <th>Key</th>
-          <th>Required</th>
-          <th>Options</th>
-          <th>Action</th>
+          <th>{{ 'Field' if lang == 'en' else 'الحقل' }}</th>
+          <th>{{ 'Key' if lang == 'en' else 'المفتاح' }}</th>
+          <th>{{ 'Required' if lang == 'en' else 'مطلوب' }}</th>
+          <th>{{ 'Options' if lang == 'en' else 'الخيارات' }}</th>
+          <th>{{ 'Action' if lang == 'en' else 'إجراء' }}</th>
         </tr>
       </thead>
       <tbody>
@@ -73,7 +73,7 @@
           <td>{{ field.id }}</td>
           <td>{{ field.label }}</td>
           <td>{{ field.field_key }}</td>
-          <td>{{ 'Yes' if field.is_required else 'No' }}</td>
+          <td>{{ ('Yes' if field.is_required else 'No') if lang == 'en' else ('نعم' if field.is_required else 'لا') }}</td>
           <td>
             {% if field.options %}
               {% for option in field.options %}
@@ -84,8 +84,9 @@
             {% endif %}
           </td>
           <td>
-            <form method="post" action="/dashboard/fields/{{ field.id }}/delete" onsubmit="return confirm('Delete this field and all options?')">
-              <button class="btn btn-danger" type="submit">Delete</button>
+            {% set delete_message = 'Delete this field and all options?' if lang == 'en' else 'حذف هذا الحقل مع كل خياراته؟' %}
+            <form method="post" action="/dashboard/fields/{{ field.id }}/delete" onsubmit="return confirm('{{ delete_message }}')">
+              <button class="btn btn-danger" type="submit">{{ 'Delete' if lang == 'en' else 'حذف' }}</button>
             </form>
           </td>
         </tr>
@@ -96,15 +97,15 @@
 </section>
 
 <section class="panel table-panel">
-  <h2>Recent Users</h2>
+  <h2>{{ 'Recent Users' if lang == 'en' else 'آخر المستخدمين' }}</h2>
   <div class="table-wrap">
     <table>
       <thead>
         <tr>
           <th>ID</th>
-          <th>Username</th>
-          <th>Role</th>
-          <th>Created At</th>
+          <th>{{ 'Username' if lang == 'en' else 'اسم المستخدم' }}</th>
+          <th>{{ 'Role' if lang == 'en' else 'الدور' }}</th>
+          <th>{{ 'Created At' if lang == 'en' else 'وقت الإنشاء' }}</th>
         </tr>
       </thead>
       <tbody>
@@ -112,7 +113,7 @@
         <tr>
           <td>{{ u.id }}</td>
           <td>{{ u.username }}</td>
-          <td>{{ 'Admin' if u.is_admin else 'User' }}</td>
+          <td>{{ ('Admin' if u.is_admin else 'User') if lang == 'en' else ('أدمن' if u.is_admin else 'مستخدم') }}</td>
           <td>{{ u.created_at }}</td>
         </tr>
         {% endfor %}

@@ -2,38 +2,38 @@
 {% block content %}
 <section class="auth-wrap">
   <div class="hero-card">
-    <h1>بوابة تحالف TNT</h1>
-    <p>سجل الدخول أو أنشئ حسابًا جديدًا للمتابعة إلى تسجيل الأعضاء.</p>
+    <h1>{{ 'TNT Alliance Portal' if lang == 'en' else 'بوابة تحالف TNT' }}</h1>
+    <p>{{ 'Sign in or create a new account to continue to member registration.' if lang == 'en' else 'سجل الدخول أو أنشئ حسابًا جديدًا للمتابعة إلى تسجيل الأعضاء.' }}</p>
   </div>
 
   <div class="auth-grid">
     <section class="panel">
-      <h2>تسجيل الدخول</h2>
+      <h2>{{ 'Sign In' if lang == 'en' else 'تسجيل الدخول' }}</h2>
       <form method="post" action="/login" class="stacked">
         <label>
-          <span>اسم المستخدم</span>
+          <span>{{ 'Username' if lang == 'en' else 'اسم المستخدم' }}</span>
           <input type="text" name="username" required />
         </label>
         <label>
-          <span>كلمة المرور</span>
+          <span>{{ 'Password' if lang == 'en' else 'كلمة المرور' }}</span>
           <input type="password" name="password" required />
         </label>
-        <button class="btn btn-primary" type="submit">دخول</button>
+        <button class="btn btn-primary" type="submit">{{ 'Login' if lang == 'en' else 'دخول' }}</button>
       </form>
     </section>
 
     <section class="panel">
-      <h2>إنشاء حساب</h2>
+      <h2>{{ 'Create Account' if lang == 'en' else 'إنشاء حساب' }}</h2>
       <form method="post" action="/register" class="stacked">
         <label>
-          <span>اسم المستخدم</span>
+          <span>{{ 'Username' if lang == 'en' else 'اسم المستخدم' }}</span>
           <input type="text" name="username" required />
         </label>
         <label>
-          <span>كلمة المرور</span>
+          <span>{{ 'Password' if lang == 'en' else 'كلمة المرور' }}</span>
           <input type="password" name="password" required />
         </label>
-        <button class="btn" type="submit">تسجيل</button>
+        <button class="btn" type="submit">{{ 'Register' if lang == 'en' else 'تسجيل' }}</button>
       </form>
     </section>
   </div>

@@ -127,10 +127,6 @@ body {
   padding: 0 8px;
 }
 
-.external-lang {
-  min-width: 115px;
-}
-
 .container {
   width: min(1120px, 94vw);
   margin: 20px auto 36px;
@@ -181,6 +177,43 @@ body {
 .stacked {
   display: grid;
   gap: 12px;
+}
+
+.member-form-strip-wrap {
+  display: grid;
+  gap: 14px;
+}
+
+.member-form-strip {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(210px, 210px);
+  gap: 12px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+}
+
+.strip-field {
+  min-width: 0;
+}
+
+.strip-field-notes {
+  grid-auto-columns: 280px;
+}
+
+.member-form-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
 }
 
 .form-grid {
@@ -237,6 +270,7 @@ textarea:focus {
   border-radius: 12px;
   padding: 10px;
   background: #f9fbff;
+  align-self: start;
 }
 
 .inline-add {
@@ -375,7 +409,9 @@ th {
     width: 100%;
   }
 
-  .external-lang {
-    min-width: 0;
+  .section-head,
+  .member-form-actions {
+    align-items: stretch;
+    flex-direction: column;
   }
 }
