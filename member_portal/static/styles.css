@@ -446,3 +446,24 @@ th{background:rgba(155,92,255,0.06);font-size:0.76rem;font-weight:800;text-trans
   .tnt-logo-text{font-size:1.9rem;}
   .tnt-logo-title{font-size:1.8rem;}
 }
+
+/* ── OWNER & STATE additions ──────────────────── */
+.nav-link-owner{color:#f5c842!important;font-weight:700;}
+.badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:.75rem;font-weight:700;background:rgba(155,92,255,.2);color:var(--accent);}
+.badge-success{background:rgba(52,199,89,.15);color:#34c759;}
+.badge-muted{background:rgba(255,255,255,.08);color:var(--muted);}
+.badge-owner{background:rgba(245,200,66,.15);color:#f5c842;}
+.btn-sm{padding:.3rem .75rem;font-size:.82rem;border-radius:8px;background:var(--accent);color:#fff;border:none;cursor:pointer;}
+.btn-danger-sm{padding:.3rem .75rem;font-size:.82rem;border-radius:8px;background:var(--danger);color:#fff;border:none;cursor:pointer;}
+.form-grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:10px;}
+.dashboard-wrap{max-width:1100px;margin:0 auto;padding:1.5rem;}
+.dash-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:1.5rem;gap:1rem;flex-wrap:wrap;}
+.dash-title{font-size:1.6rem;font-weight:900;margin:0;}
+.dash-subtitle{color:var(--muted);font-size:.9rem;margin:.25rem 0 0;}
+.section-title{font-size:1.1rem;font-weight:700;margin:0 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--line);}
+.table-scroll{overflow-x:auto;}
+.data-table{width:100%;border-collapse:collapse;font-size:.88rem;}
+.data-table th{text-align:left;padding:.55rem .75rem;border-bottom:1px solid var(--line);color:var(--muted);font-weight:600;}
+.data-table td{padding:.55rem .75rem;border-bottom:1px solid rgba(255,255,255,.05);vertical-align:middle;}
+.data-table tr:hover td{background:rgba(255,255,255,.03);}
+@media(max-width:640px){.form-grid-2{grid-template-columns:1fr;}.dash-header{flex-direction:column;}}

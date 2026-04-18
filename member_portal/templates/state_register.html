@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="auth-center-wrap">
+  <div class="tnt-logo-hero">
+    <div class="tnt-logo-outer-ring">
+      <div class="tnt-logo-badge-xl">
+        <span class="tnt-logo-text">TNT</span>
+      </div>
+    </div>
+    <h1 class="tnt-logo-title">Create State Account</h1>
+    <p class="tnt-logo-subtitle">Register a new state — any member of the state can use these credentials</p>
+  </div>
+
+  <div class="auth-panel-single panel">
+    <h2 class="auth-panel-title">New State Account</h2>
+    <form method="post" action="/state-register" class="stacked">
+      <label>
+        <span>State Name</span>
+        <input type="text" name="state_name" placeholder="e.g. 123 or NewYork" required />
+      </label>
+      <label>
+        <span>Password (shared within the state)</span>
+        <input type="password" name="password" required minlength="6" />
+      </label>
+      <button class="btn btn-primary full-btn" type="submit">Create State Account</button>
+    </form>
+    <p style="margin-top:1rem;text-align:center;color:var(--muted)">
+      Already have a state account? <a href="/state-login">Sign in</a>
+    </p>
+  </div>
+</div>
+{% endblock %}

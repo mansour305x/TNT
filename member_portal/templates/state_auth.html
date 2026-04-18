@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="auth-center-wrap">
+  <div class="tnt-logo-hero">
+    <div class="tnt-logo-outer-ring">
+      <div class="tnt-logo-badge-xl">
+        <span class="tnt-logo-text">TNT</span>
+      </div>
+    </div>
+    <h1 class="tnt-logo-title">State Account Login</h1>
+    <p class="tnt-logo-subtitle">Sign in with your state name &amp; password</p>
+  </div>
+
+  <div class="auth-panel-single panel">
+    <h2 class="auth-panel-title">State Login</h2>
+
+    <form method="post" action="/state-login" class="stacked">
+      <label>
+        <span>State Name</span>
+        <input type="text" name="state_name" placeholder="e.g. 123 or MyState" required autocomplete="username" />
+      </label>
+      <label>
+        <span>Password</span>
+        <input type="password" name="password" required autocomplete="current-password" />
+      </label>
+      <button class="btn btn-primary full-btn" type="submit">Sign In as State</button>
+    </form>
+
+    <p style="margin-top:1rem;text-align:center;color:var(--muted)">
+      Don't have a state account? <a href="/state-register">Create one</a>
+    </p>
+    <p style="text-align:center;margin-top:.5rem;">
+      <a href="/">← Regular Login</a>
+    </p>
+  </div>
+</div>
+{% endblock %}

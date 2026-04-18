@@ -54,6 +54,13 @@ EMAIL_VERIFY_TOKEN_TTL_SECONDS = 60 * 60
 DEFAULT_FULL_ADMIN_USERNAME = os.getenv("PORTAL_FULL_ADMIN_USERNAME", "mn9@hotmail.com")
 DEFAULT_FULL_ADMIN_PASSWORD = os.getenv("PORTAL_FULL_ADMIN_PASSWORD", "DANGER")
 
+# ── Owner account (immutable super-admin) ─────────────────────────────────────
+OWNER_USERNAME = os.getenv("OWNER_USERNAME", "danger")
+OWNER_PASSWORD = os.getenv("OWNER_PASSWORD", "Aa123456")
+
+# ── State-account session cookie ──────────────────────────────────────────────
+STATE_SESSION_COOKIE = "state_portal_session"
+
 DEFAULT_LIST_CONFIGS = [
     {"list_key": "member_registry", "label": "Member Registry", "sort_order": 10, "is_enabled": 1},
     {"list_key": "transfers", "label": "Transfers List", "sort_order": 20, "is_enabled": 1},
@@ -367,8 +374,27 @@ def init_db() -> None:
                 invite_type TEXT NOT NULL DEFAULT '',
                 future_alliance TEXT NOT NULL,
                 created_by INTEGER,
+                state_account_id INTEGER,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY(created_by) REFERENCES users(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS state_accounts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                state_name TEXT NOT NULL UNIQUE,
+                password_hash TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE IF NOT EXISTS features (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                feature_key TEXT NOT NULL UNIQUE,
+                label TEXT NOT NULL,
+                description TEXT NOT NULL DEFAULT '',
+                feature_type TEXT NOT NULL DEFAULT 'function',
+                is_enabled INTEGER NOT NULL DEFAULT 1,
+                config_json TEXT NOT NULL DEFAULT '{}',
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             );
             """
         )
@@ -378,6 +404,8 @@ def init_db() -> None:
         migrate_user_auth_columns(conn)
         ensure_user_session_nonces(conn)
         migrate_transfer_record_columns(conn)
+        migrate_state_account_id_columns(conn)
+        migrate_user_is_owner_column(conn)
         create_oauth_identities_table(conn)
         create_password_resets_table(conn)
         create_email_verifications_table(conn)
@@ -391,6 +419,7 @@ def init_db() -> None:
             username=DEFAULT_FULL_ADMIN_USERNAME,
             password=DEFAULT_FULL_ADMIN_PASSWORD,
         )
+        ensure_owner_account(conn)
         ensure_default_dropdown_fields(conn)
         ensure_default_list_configs(conn)
 
@@ -492,6 +521,21 @@ def migrate_transfer_record_columns(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE transfer_records ADD COLUMN invite_type TEXT NOT NULL DEFAULT ''")
 
 
+def migrate_state_account_id_columns(conn: sqlite3.Connection) -> None:
+    tr_cols = {row["name"] for row in conn.execute("PRAGMA table_info(transfer_records)").fetchall()}
+    if "state_account_id" not in tr_cols:
+        conn.execute("ALTER TABLE transfer_records ADD COLUMN state_account_id INTEGER")
+    mr_cols = {row["name"] for row in conn.execute("PRAGMA table_info(member_records)").fetchall()}
+    if "state_account_id" not in mr_cols:
+        conn.execute("ALTER TABLE member_records ADD COLUMN state_account_id INTEGER")
+
+
+def migrate_user_is_owner_column(conn: sqlite3.Connection) -> None:
+    columns = {row["name"] for row in conn.execute("PRAGMA table_info(users)").fetchall()}
+    if "is_owner" not in columns:
+        conn.execute("ALTER TABLE users ADD COLUMN is_owner INTEGER NOT NULL DEFAULT 0")
+
+
 def ensure_default_dropdown_fields(conn: sqlite3.Connection) -> None:
     for field in DEFAULT_DROPDOWN_FIELDS:
         existing = conn.execute(
@@ -554,6 +598,24 @@ def ensure_admin_account(conn: sqlite3.Connection, username: str, password: str)
     )
 
 
+def ensure_owner_account(conn: sqlite3.Connection) -> None:
+    """Create or update the immutable owner account 'danger'."""
+    existing = conn.execute(
+        "SELECT id FROM users WHERE username = ? LIMIT 1",
+        (OWNER_USERNAME,),
+    ).fetchone()
+    if existing:
+        conn.execute(
+            "UPDATE users SET is_admin = 1, is_owner = 1, auth_provider = 'email' WHERE id = ?",
+            (existing["id"],),
+        )
+    else:
+        conn.execute(
+            "INSERT INTO users (username, password_hash, is_admin, is_owner, email, auth_provider, session_nonce) VALUES (?, ?, 1, 1, '', 'email', ?)",
+            (OWNER_USERNAME, hash_password(OWNER_PASSWORD), generate_session_nonce()),
+        )
+
+
 def normalize_email(raw_email: str) -> str:
     return raw_email.strip().lower()
 
@@ -589,7 +651,49 @@ def is_full_admin_username(username: str) -> bool:
     return username.strip().lower() in {
         "admin",
         DEFAULT_FULL_ADMIN_USERNAME.strip().lower(),
+        OWNER_USERNAME.strip().lower(),
     }
+
+
+# ── State account helpers ─────────────────────────────────────────────────────
+
+def issue_state_session_cookie(state_account_id: int) -> str:
+    expires_at = int(time.time()) + SESSION_TTL_SECONDS
+    payload = f"state:{state_account_id}:{expires_at}"
+    signature = sign_session(payload)
+    return f"{payload}:{signature}"
+
+
+def parse_state_session_cookie(cookie_value: str | None) -> int | None:
+    """Return state_account_id or None."""
+    if not cookie_value:
+        return None
+    try:
+        prefix, state_id_s, expires_s, signature = cookie_value.split(":", 3)
+        if prefix != "state":
+            return None
+        payload = f"state:{state_id_s}:{expires_s}"
+        if not hmac.compare_digest(signature, sign_session(payload)):
+            return None
+        if int(expires_s) < int(time.time()):
+            return None
+        return int(state_id_s)
+    except (ValueError, TypeError):
+        return None
+
+
+def get_current_state_account(request: web.Request) -> dict[str, Any] | None:
+    state_id = parse_state_session_cookie(request.cookies.get(STATE_SESSION_COOKIE))
+    if not state_id:
+        return None
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT id, state_name, created_at FROM state_accounts WHERE id = ?",
+            (state_id,),
+        ).fetchone()
+    if not row:
+        return None
+    return dict(row)
 
 
 def hash_password(raw_password: str) -> str:
@@ -689,7 +793,7 @@ def get_current_user(request: web.Request) -> dict[str, Any] | None:
 
     with get_db() as conn:
         row = conn.execute(
-            "SELECT id, username, email, email_verified, is_admin, created_at, state, session_nonce FROM users WHERE id = ?",
+            "SELECT id, username, email, email_verified, is_admin, is_owner, created_at, state, session_nonce FROM users WHERE id = ?",
             (user_id,),
         ).fetchone()
 
@@ -2468,6 +2572,364 @@ async def healthz(request: web.Request) -> web.Response:
     return web.Response(text="ok", content_type="text/plain")
 
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# STATE ACCOUNT routes
+# ═══════════════════════════════════════════════════════════════════════════════
+
+async def state_login_page(request: web.Request) -> web.Response:
+    if get_current_state_account(request):
+        raise web.HTTPFound(location="/state/portal")
+    return render_template(request, "state_auth.html", {
+        "title": "State Login | TNT Alliance",
+    })
+
+
+async def state_login_post(request: web.Request) -> web.StreamResponse:
+    data = await request.post()
+    state_name = str(data.get("state_name", "")).strip()
+    password = str(data.get("password", "")).strip()
+
+    if not state_name or not password:
+        return flash_response("/state-login", "State name and password are required", "error")
+
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT id, password_hash FROM state_accounts WHERE state_name = ? LIMIT 1",
+            (state_name,),
+        ).fetchone()
+
+    if not row or not verify_password(password, row["password_hash"]):
+        return flash_response("/state-login", "Invalid state name or password", "error")
+
+    resp = web.HTTPFound(location="/state/portal")
+    resp.set_cookie(
+        STATE_SESSION_COOKIE,
+        issue_state_session_cookie(int(row["id"])),
+        max_age=SESSION_TTL_SECONDS,
+        httponly=True,
+        samesite="Lax",
+    )
+    resp.set_cookie("flash", "success|Welcome back!", max_age=12, httponly=True, samesite="Lax")
+    return resp
+
+
+async def state_register_page(request: web.Request) -> web.Response:
+    if get_current_state_account(request):
+        raise web.HTTPFound(location="/state/portal")
+    return render_template(request, "state_register.html", {
+        "title": "Create State Account | TNT Alliance",
+    })
+
+
+async def state_register_post(request: web.Request) -> web.StreamResponse:
+    data = await request.post()
+    state_name = str(data.get("state_name", "")).strip()
+    password = str(data.get("password", "")).strip()
+
+    if len(state_name) < 2 or len(password) < 6:
+        return flash_response("/state-register", "State name must be ≥2 chars and password ≥6 chars", "error")
+
+    with get_db() as conn:
+        try:
+            conn.execute(
+                "INSERT INTO state_accounts (state_name, password_hash) VALUES (?, ?)",
+                (state_name, hash_password(password)),
+            )
+        except sqlite3.IntegrityError:
+            return flash_response("/state-register", "A state account with this name already exists", "error")
+
+    return flash_response("/state-login", "State account created. You can now sign in.", "success")
+
+
+async def state_logout(request: web.Request) -> web.StreamResponse:
+    resp = web.HTTPFound(location="/state-login")
+    resp.del_cookie(STATE_SESSION_COOKIE)
+    resp.set_cookie("flash", "info|State session ended", max_age=12, httponly=True, samesite="Lax")
+    return resp
+
+
+async def state_portal(request: web.Request) -> web.Response:
+    sa = get_current_state_account(request)
+    if not sa:
+        return flash_response("/state-login", "Please sign in to your state account first", "error")
+    with get_db() as conn:
+        members = conn.execute(
+            "SELECT id, member_name, member_uid, alliance, rank, created_at FROM member_records WHERE state_account_id = ? ORDER BY id DESC LIMIT 100",
+            (sa["id"],),
+        ).fetchall()
+        transfers = conn.execute(
+            "SELECT id, member_name, member_uid, power, furnace, current_state, future_alliance, created_at FROM transfer_records WHERE state_account_id = ? ORDER BY id DESC LIMIT 100",
+            (sa["id"],),
+        ).fetchall()
+        fields = fetch_fields_and_options(conn)
+        alliances = conn.execute(
+            "SELECT alliance_tag FROM state_alliances WHERE state_number = ? ORDER BY alliance_tag",
+            (sa["state_name"],),
+        ).fetchall()
+    return render_template(request, "state_portal.html", {
+        "title": f"State Portal — {sa['state_name']}",
+        "sa": sa,
+        "members": [dict(r) for r in members],
+        "transfers": [dict(r) for r in transfers],
+        "fields": fields,
+        "alliances": [r["alliance_tag"] for r in alliances],
+    })
+
+
+async def state_add_member(request: web.Request) -> web.StreamResponse:
+    sa = get_current_state_account(request)
+    if not sa:
+        return flash_response("/state-login", "Please sign in first", "error")
+
+    data = await request.post()
+    member_name = str(data.get("current_name", "")).strip()
+    member_uid = str(data.get("player_id", "")).strip()
+    alliance = str(data.get("alliance", "")).strip()
+    rank = str(data.get("rank", "")).strip()
+    notes = str(data.get("notes", "")).strip()
+
+    if not member_name or not member_uid or not alliance or not rank:
+        return flash_response("/state/portal", "Player ID, Name, Alliance and Rank are required", "error")
+
+    with get_db() as conn:
+        cur = conn.execute(
+            "INSERT INTO member_records (member_name, member_uid, alliance, rank, notes, state_account_id) VALUES (?, ?, ?, ?, ?, ?)",
+            (member_name, member_uid, alliance, rank, notes, sa["id"]),
+        )
+        record_id = int(cur.lastrowid)
+        fields = fetch_fields_and_options(conn)
+        for field in fields:
+            val = str(data.get(f"field_{field['id']}", "")).strip()
+            if val:
+                conn.execute(
+                    "INSERT INTO member_record_values (record_id, field_id, option_value) VALUES (?, ?, ?)",
+                    (record_id, field["id"], val),
+                )
+
+    return flash_response("/state/portal", "Member added successfully", "success")
+
+
+async def state_add_transfer(request: web.Request) -> web.StreamResponse:
+    sa = get_current_state_account(request)
+    if not sa:
+        return flash_response("/state-login", "Please sign in first", "error")
+
+    data = await request.post()
+    member_name = str(data.get("member_name", "")).strip()
+    member_uid = str(data.get("member_uid", "")).strip()
+    power = str(data.get("power", "")).strip()
+    furnace = str(data.get("furnace", "")).strip()
+    current_state = str(data.get("current_state", "")).strip()
+    invite_type = str(data.get("invite_type", "")).strip()
+    future_alliance = str(data.get("future_alliance", "")).strip()
+
+    if not all([member_name, member_uid, power, furnace, current_state, future_alliance]):
+        return flash_response("/state/portal", "All fields are required", "error")
+
+    with get_db() as conn:
+        conn.execute(
+            "INSERT INTO transfer_records (member_name, member_uid, power, furnace, current_state, invite_type, future_alliance, state_account_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (member_name, member_uid, power, furnace, current_state, invite_type, future_alliance, sa["id"]),
+        )
+
+    return flash_response("/state/portal", "Transfer added successfully", "success")
+
+
+async def state_delete_member(request: web.Request) -> web.StreamResponse:
+    sa = get_current_state_account(request)
+    if not sa:
+        return flash_response("/state-login", "Please sign in first", "error")
+
+    record_id = int(request.match_info["record_id"])
+    with get_db() as conn:
+        # Only allow deletion of records belonging to this state
+        conn.execute(
+            "DELETE FROM member_records WHERE id = ? AND state_account_id = ?",
+            (record_id, sa["id"]),
+        )
+    return flash_response("/state/portal", "Member deleted", "info")
+
+
+async def state_delete_transfer(request: web.Request) -> web.StreamResponse:
+    sa = get_current_state_account(request)
+    if not sa:
+        return flash_response("/state-login", "Please sign in first", "error")
+
+    transfer_id = int(request.match_info["transfer_id"])
+    with get_db() as conn:
+        conn.execute(
+            "DELETE FROM transfer_records WHERE id = ? AND state_account_id = ?",
+            (transfer_id, sa["id"]),
+        )
+    return flash_response("/state/portal", "Transfer deleted", "info")
+
+
+async def state_change_password(request: web.Request) -> web.StreamResponse:
+    sa = get_current_state_account(request)
+    if not sa:
+        return flash_response("/state-login", "Please sign in first", "error")
+
+    data = await request.post()
+    current_pw = str(data.get("current_password", "")).strip()
+    new_pw = str(data.get("new_password", "")).strip()
+
+    if len(new_pw) < 6:
+        return flash_response("/state/portal", "New password must be at least 6 characters", "error")
+
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT password_hash FROM state_accounts WHERE id = ?",
+            (sa["id"],),
+        ).fetchone()
+        if not row or not verify_password(current_pw, row["password_hash"]):
+            return flash_response("/state/portal", "Current password is incorrect", "error")
+        conn.execute(
+            "UPDATE state_accounts SET password_hash = ? WHERE id = ?",
+            (hash_password(new_pw), sa["id"]),
+        )
+
+    return flash_response("/state/portal", "Password changed successfully", "success")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# OWNER PANEL routes — features management
+# ═══════════════════════════════════════════════════════════════════════════════
+
+async def owner_panel(request: web.Request) -> web.Response:
+    user = get_current_user(request)
+    if not user or not user.get("is_owner"):
+        return flash_response("/portal", "Owner access required", "error")
+
+    with get_db() as conn:
+        features = conn.execute(
+            "SELECT id, feature_key, label, description, feature_type, is_enabled, config_json, created_at FROM features ORDER BY id DESC"
+        ).fetchall()
+        state_accounts = conn.execute(
+            "SELECT id, state_name, created_at FROM state_accounts ORDER BY id ASC"
+        ).fetchall()
+        all_users = conn.execute(
+            "SELECT id, username, email, is_admin, is_owner, state, created_at FROM users ORDER BY id DESC"
+        ).fetchall()
+
+    return render_template(request, "owner_panel.html", {
+        "title": "Owner Panel | TNT Alliance",
+        "features": [dict(f) for f in features],
+        "state_accounts": [dict(s) for s in state_accounts],
+        "all_users": [dict(u) for u in all_users],
+    })
+
+
+async def owner_add_feature(request: web.Request) -> web.StreamResponse:
+    user = get_current_user(request)
+    if not user or not user.get("is_owner"):
+        return flash_response("/portal", "Owner access required", "error")
+
+    data = await request.post()
+    feature_key = str(data.get("feature_key", "")).strip().lower().replace(" ", "_")
+    label = str(data.get("label", "")).strip()
+    description = str(data.get("description", "")).strip()
+    feature_type = str(data.get("feature_type", "function")).strip()
+    is_enabled = 1 if str(data.get("is_enabled", "1")).strip() == "1" else 0
+    config_json = str(data.get("config_json", "{}")).strip() or "{}"
+
+    if not feature_key or not label:
+        return flash_response("/owner", "Feature key and label are required", "error")
+
+    with get_db() as conn:
+        try:
+            conn.execute(
+                "INSERT INTO features (feature_key, label, description, feature_type, is_enabled, config_json) VALUES (?, ?, ?, ?, ?, ?)",
+                (feature_key, label, description, feature_type, is_enabled, config_json),
+            )
+        except sqlite3.IntegrityError:
+            return flash_response("/owner", "Feature key already exists", "error")
+
+    return flash_response("/owner", "Feature added successfully", "success")
+
+
+async def owner_toggle_feature(request: web.Request) -> web.StreamResponse:
+    user = get_current_user(request)
+    if not user or not user.get("is_owner"):
+        return flash_response("/portal", "Owner access required", "error")
+
+    feature_id = int(request.match_info["feature_id"])
+    data = await request.post()
+    is_enabled = 1 if str(data.get("is_enabled", "1")).strip() == "1" else 0
+
+    with get_db() as conn:
+        conn.execute("UPDATE features SET is_enabled = ? WHERE id = ?", (is_enabled, feature_id))
+
+    return flash_response("/owner", "Feature updated", "success")
+
+
+async def owner_delete_feature(request: web.Request) -> web.StreamResponse:
+    user = get_current_user(request)
+    if not user or not user.get("is_owner"):
+        return flash_response("/portal", "Owner access required", "error")
+
+    feature_id = int(request.match_info["feature_id"])
+    with get_db() as conn:
+        conn.execute("DELETE FROM features WHERE id = ?", (feature_id,))
+
+    return flash_response("/owner", "Feature deleted", "info")
+
+
+async def owner_delete_state_account(request: web.Request) -> web.StreamResponse:
+    user = get_current_user(request)
+    if not user or not user.get("is_owner"):
+        return flash_response("/portal", "Owner access required", "error")
+
+    sa_id = int(request.match_info["sa_id"])
+    with get_db() as conn:
+        conn.execute("DELETE FROM state_accounts WHERE id = ?", (sa_id,))
+
+    return flash_response("/owner", "State account deleted", "info")
+
+
+async def owner_reset_state_password(request: web.Request) -> web.StreamResponse:
+    user = get_current_user(request)
+    if not user or not user.get("is_owner"):
+        return flash_response("/portal", "Owner access required", "error")
+
+    sa_id = int(request.match_info["sa_id"])
+    data = await request.post()
+    new_pw = str(data.get("new_password", "")).strip()
+
+    if len(new_pw) < 6:
+        return flash_response("/owner", "Password must be at least 6 characters", "error")
+
+    with get_db() as conn:
+        conn.execute(
+            "UPDATE state_accounts SET password_hash = ? WHERE id = ?",
+            (hash_password(new_pw), sa_id),
+        )
+
+    return flash_response("/owner", "State account password reset successfully", "success")
+
+
+async def api_features(request: web.Request) -> web.Response:
+    """Public JSON endpoint listing enabled features."""
+    with get_db() as conn:
+        rows = conn.execute(
+            "SELECT feature_key, label, description, feature_type, config_json FROM features WHERE is_enabled = 1"
+        ).fetchall()
+    import json
+    features = []
+    for r in rows:
+        try:
+            cfg = json.loads(r["config_json"])
+        except Exception:
+            cfg = {}
+        features.append({
+            "feature_key": r["feature_key"],
+            "label": r["label"],
+            "description": r["description"],
+            "feature_type": r["feature_type"],
+            "config": cfg,
+        })
+    return web.json_response({"features": features})
+
+
 def build_app() -> web.Application:
     init_db()
 
@@ -2531,6 +2993,28 @@ def build_app() -> web.Application:
     app.router.add_post("/profile/resend-verify-email", resend_email_verification_otp)
     app.router.add_get("/members/export", export_members_csv)
     app.router.add_get("/transfers/export", export_transfers_csv)
+
+    # ── State Account routes ───────────────────────────────────────────────────
+    app.router.add_get("/state-login", state_login_page)
+    app.router.add_post("/state-login", state_login_post)
+    app.router.add_get("/state-register", state_register_page)
+    app.router.add_post("/state-register", state_register_post)
+    app.router.add_get("/state-logout", state_logout)
+    app.router.add_get("/state/portal", state_portal)
+    app.router.add_post("/state/members/create", state_add_member)
+    app.router.add_post("/state/transfers/create", state_add_transfer)
+    app.router.add_post("/state/members/{record_id}/delete", state_delete_member)
+    app.router.add_post("/state/transfers/{transfer_id}/delete", state_delete_transfer)
+    app.router.add_post("/state/change-password", state_change_password)
+
+    # ── Owner Panel routes ─────────────────────────────────────────────────────
+    app.router.add_get("/owner", owner_panel)
+    app.router.add_post("/owner/features/add", owner_add_feature)
+    app.router.add_post("/owner/features/{feature_id}/toggle", owner_toggle_feature)
+    app.router.add_post("/owner/features/{feature_id}/delete", owner_delete_feature)
+    app.router.add_post("/owner/state-accounts/{sa_id}/delete", owner_delete_state_account)
+    app.router.add_post("/owner/state-accounts/{sa_id}/reset-password", owner_reset_state_password)
+    app.router.add_get("/api/features", api_features)
 
     return app
 

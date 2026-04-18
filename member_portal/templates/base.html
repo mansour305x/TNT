@@ -27,6 +27,9 @@
       {% if current_user.is_admin %}
       <a class="nav-link {% if request_path == '/dashboard' %}nav-link-active{% endif %}" href="/dashboard">{{ 'Dashboard' if lang == 'en' else 'لوحة التحكم' }}</a>
       {% endif %}
+      {% if current_user.is_owner %}
+      <a class="nav-link nav-link-owner {% if request_path == '/owner' %}nav-link-active{% endif %}" href="/owner">👑 Owner</a>
+      {% endif %}
 
       <div class="profile-nav" id="profileNav">
         <button class="profile-trigger" onclick="toggleProfile()" type="button">

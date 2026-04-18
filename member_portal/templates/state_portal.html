@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="dashboard-wrap">
+
+  <div class="dash-header">
+    <div>
+      <h1 class="dash-title">🏛️ State Portal — {{ sa.state_name }}</h1>
+      <p class="dash-subtitle">Manage your state's members and transfers</p>
+    </div>
+    <a href="/state-logout" class="btn btn-ghost" style="align-self:start;">Sign Out</a>
+  </div>
+
+  <!-- Change Password -->
+  <details class="panel" style="margin-bottom:1.5rem;">
+    <summary style="cursor:pointer;font-weight:700;padding:.75rem 1rem;">🔒 Change State Password</summary>
+    <div style="padding:1rem;">
+      <form method="post" action="/state/change-password" class="stacked" style="max-width:400px;">
+        <label><span>Current Password</span><input type="password" name="current_password" required /></label>
+        <label><span>New Password</span><input type="password" name="new_password" required minlength="6" /></label>
+        <button class="btn btn-primary" type="submit">Change Password</button>
+      </form>
+    </div>
+  </details>
+
+  <!-- Add Member -->
+  <div class="panel" style="margin-bottom:1.5rem;">
+    <h2 class="section-title">➕ Add Member</h2>
+    <form method="post" action="/state/members/create" class="stacked" style="max-width:600px;">
+      <div class="form-grid-2">
+        <label><span>Player ID *</span><input type="text" name="player_id" required /></label>
+        <label><span>Current Name *</span><input type="text" name="current_name" required /></label>
+        <label><span>Alliance *</span>
+          <input type="text" name="alliance" list="alliance-list" required />
+          <datalist id="alliance-list">
+            {% for tag in alliances %}<option value="{{ tag }}">{% endfor %}
+          </datalist>
+        </label>
+        <label><span>Rank *</span>
+          <select name="rank">
+            <option value="R1">R1</option><option value="R2">R2</option>
+            <option value="R3">R3</option><option value="R4">R4</option>
+            <option value="R5">R5</option>
+          </select>
+        </label>
+      </div>
+      {% for field in fields %}
+      <label>
+        <span>{{ field.label }}{% if field.is_required %} *{% endif %}</span>
+        <select name="field_{{ field.id }}" {% if field.is_required %}required{% endif %}>
+          <option value="">-- Select --</option>
+          {% for opt in field.options %}<option value="{{ opt.value }}">{{ opt.value }}</option>{% endfor %}
+        </select>
+      </label>
+      {% endfor %}
+      <label><span>Notes</span><textarea name="notes" rows="2"></textarea></label>
+      <button class="btn btn-primary" type="submit">Add Member</button>
+    </form>
+  </div>
+
+  <!-- Members Table -->
+  <div class="panel" style="margin-bottom:1.5rem;">
+    <h2 class="section-title">👥 Members ({{ members|length }})</h2>
+    {% if members %}
+    <div class="table-scroll">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>#</th><th>Name</th><th>UID</th><th>Alliance</th><th>Rank</th><th>Added</th><th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for m in members %}
+          <tr>
+            <td>{{ loop.index }}</td>
+            <td>{{ m.member_name }}</td>
+            <td>{{ m.member_uid }}</td>
+            <td>{{ m.alliance }}</td>
+            <td>{{ m.rank }}</td>
+            <td>{{ m.created_at[:10] }}</td>
+            <td>
+              <form method="post" action="/state/members/{{ m.id }}/delete" onsubmit="return confirm('Delete this member?')">
+                <button type="submit" class="btn btn-danger-sm">Delete</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p style="color:var(--muted);text-align:center;padding:2rem;">No members yet</p>
+    {% endif %}
+  </div>
+
+  <!-- Add Transfer -->
+  <div class="panel" style="margin-bottom:1.5rem;">
+    <h2 class="section-title">🔄 Add Transfer</h2>
+    <form method="post" action="/state/transfers/create" class="stacked" style="max-width:600px;">
+      <div class="form-grid-2">
+        <label><span>Member Name *</span><input type="text" name="member_name" required /></label>
+        <label><span>Member UID *</span><input type="text" name="member_uid" required /></label>
+        <label><span>Power *</span><input type="text" name="power" required /></label>
+        <label><span>Furnace *</span><input type="text" name="furnace" required /></label>
+        <label><span>Current State *</span><input type="text" name="current_state" required /></label>
+        <label><span>Invite Type</span>
+          <select name="invite_type">
+            <option value="">-- None --</option>
+            <option value="Open">Open</option>
+            <option value="Invite Only">Invite Only</option>
+          </select>
+        </label>
+        <label><span>Future Alliance *</span>
+          <input type="text" name="future_alliance" list="alliance-list" required />
+        </label>
+      </div>
+      <button class="btn btn-primary" type="submit">Add Transfer</button>
+    </form>
+  </div>
+
+  <!-- Transfers Table -->
+  <div class="panel">
+    <h2 class="section-title">📋 Transfers ({{ transfers|length }})</h2>
+    {% if transfers %}
+    <div class="table-scroll">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>#</th><th>Name</th><th>UID</th><th>Power</th><th>Furnace</th><th>Current</th><th>Future Alliance</th><th>Date</th><th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for t in transfers %}
+          <tr>
+            <td>{{ loop.index }}</td>
+            <td>{{ t.member_name }}</td>
+            <td>{{ t.member_uid }}</td>
+            <td>{{ t.power }}</td>
+            <td>{{ t.furnace }}</td>
+            <td>{{ t.current_state }}</td>
+            <td>{{ t.future_alliance }}</td>
+            <td>{{ t.created_at[:10] }}</td>
+            <td>
+              <form method="post" action="/state/transfers/{{ t.id }}/delete" onsubmit="return confirm('Delete?')">
+                <button type="submit" class="btn btn-danger-sm">Delete</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p style="color:var(--muted);text-align:center;padding:2rem;">No transfers yet</p>
+    {% endif %}
+  </div>
+
+</div>
+{% endblock %}
