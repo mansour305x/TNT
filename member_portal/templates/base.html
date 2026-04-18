@@ -184,14 +184,14 @@
   </div>
   <button class="sidebar-toggle" id="sidebarToggle" onclick="toggleSidebar()" aria-label="Toggle sidebar">☰</button>
   <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
+  {% endif %}
+  {% if current_user and current_user.is_admin %}
   <main class="container sidebar-layout">
-    {% block content %}{% endblock %}
-  </main>
   {% else %}
   <main class="container">
+  {% endif %}
     {% block content %}{% endblock %}
   </main>
-  {% endif %}
 
   <script>
     function toggleProfile() {
