@@ -18,6 +18,10 @@ services:
         value: mn9@hotmail.com
       - key: PORTAL_FULL_ADMIN_PASSWORD
         value: DANGER
+      - key: OWNER_USERNAME
+        value: danger
+      - key: OWNER_PASSWORD
+        value: Aa123456
     disk:
       name: tnt-data
       mountPath: /var/data
