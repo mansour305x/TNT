@@ -1,0 +1,48 @@
+name: Deploy to Render
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Trigger Render Deploy Hook
+        if: ${{ secrets.RENDER_DEPLOY_HOOK != '' }}
+        run: |
+          echo "Triggering Render deploy..."
+          code=$(curl -sS -o /tmp/resp.txt -w "%{http_code}" -X POST "${{ secrets.RENDER_DEPLOY_HOOK }}")
+          echo "Render API response: HTTP $code"
+          cat /tmp/resp.txt || true
+
+      - name: Wait for Deploy & Health Check
+        run: |
+          echo "Waiting 90s for Render to rebuild..."
+          sleep 90
+          URL="https://tnt-2.onrender.com/healthz"
+          for i in $(seq 1 10); do
+            code=$(curl -sS -o /tmp/hc.txt -w "%{http_code}" --connect-timeout 10 --max-time 20 "$URL" || echo "000")
+            echo "Attempt $i — HTTP $code"
+            cat /tmp/hc.txt || true
+            if [ "$code" = "200" ]; then
+              echo "✅ Site is live!"
+              break
+            fi
+            sleep 30
+          done
+
+      - name: Smoke Test
+        run: |
+          BASE="https://tnt-2.onrender.com"
+          for path in "/healthz" "/" "/state-login" "/state-register" "/api/features"; do
+            code=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 20 "$BASE$path" || echo "000")
+            echo "$path → HTTP $code"
+          done
