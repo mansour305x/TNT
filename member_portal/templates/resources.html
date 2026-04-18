@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">
+    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+    {{ 'Resources' if lang == 'en' else 'الموارد' }}
+  </h1>
+  <span class="page-count">{{ resources | length }}</span>
+</div>
+
+<div class="card mb-4">
+  <div class="card-header">{{ 'Add Resource' if lang == 'en' else 'إضافة مورد' }}</div>
+  <div class="card-body">
+    <form method="post" action="/resources/save" class="grid-form">
+      <div class="form-group">
+        <label>{{ 'Resource Type' if lang == 'en' else 'نوع المورد' }} *</label>
+        <select name="resource_type" class="input-field" required>
+          <option value="">-- Select --</option>
+          <option value="Food">Food</option>
+          <option value="Wood">Wood</option>
+          <option value="Stone">Stone</option>
+          <option value="Gold">Gold</option>
+          <option value="Iron">Iron</option>
+          <option value="Speed Up">Speed Up</option>
+          <option value="RSS Pack">RSS Pack</option>
+          <option value="Other">Other</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>{{ 'Quantity' if lang == 'en' else 'الكمية' }}</label>
+        <input type="text" name="quantity" class="input-field" placeholder="e.g. 500M" />
+      </div>
+      <div class="form-group">
+        <label>{{ 'Notes' if lang == 'en' else 'ملاحظات' }}</label>
+        <input type="text" name="notes" class="input-field" placeholder="Optional" />
+      </div>
+      <div class="form-group">
+        <button type="submit" class="btn btn-primary" style="margin-top:1.5rem">+ {{ 'Add' if lang == 'en' else 'إضافة' }}</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% if resources %}
+<div class="card">
+  <div class="table-scroll">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>{{ 'Type' if lang == 'en' else 'النوع' }}</th>
+          <th>{{ 'Quantity' if lang == 'en' else 'الكمية' }}</th>
+          <th>{{ 'Notes' if lang == 'en' else 'ملاحظات' }}</th>
+          <th>{{ 'Updated' if lang == 'en' else 'آخر تحديث' }}</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in resources %}
+        <tr>
+          <td class="muted">{{ loop.index }}</td>
+          <td><span class="badge badge-gold">{{ r.resource_type }}</span></td>
+          <td><strong>{{ r.quantity or '—' }}</strong></td>
+          <td class="muted">{{ r.notes or '—' }}</td>
+          <td class="muted">{{ r.updated_at[:10] if r.updated_at else '—' }}</td>
+          <td>
+            <form method="post" action="/resources/{{ r.id }}/delete" onsubmit="return confirm('Delete?')">
+              <button type="submit" class="btn btn-danger btn-sm">✕</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="empty-state">
+  <div class="empty-icon">🏦</div>
+  <p>{{ 'No resources tracked yet.' if lang == 'en' else 'لا يوجد موارد بعد.' }}</p>
+</div>
+{% endif %}
+{% endblock %}

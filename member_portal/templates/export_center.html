@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">
+    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+    {{ 'Export Center' if lang == 'en' else 'مركز التصدير' }}
+  </h1>
+</div>
+
+<div class="export-grid">
+  <div class="card export-card">
+    <div class="export-icon">⭐</div>
+    <div class="export-title">{{ 'Rally Leaders' if lang == 'en' else 'قادة التجمع' }}</div>
+    <p class="muted export-desc">{{ 'Export all rally leaders as CSV.' if lang == 'en' else 'تصدير قادة التجمع كملف CSV.' }}</p>
+    <a href="/export/rally-leaders.csv" class="btn btn-primary btn-sm">⬇ CSV</a>
+  </div>
+
+  <div class="card export-card">
+    <div class="export-icon">👥</div>
+    <div class="export-title">{{ 'Teams & Members' if lang == 'en' else 'الفرق والأعضاء' }}</div>
+    <p class="muted export-desc">{{ 'Export all teams and members.' if lang == 'en' else 'تصدير الفرق وأعضاؤها.' }}</p>
+    <a href="/export/teams.csv" class="btn btn-primary btn-sm">⬇ CSV</a>
+  </div>
+
+  <div class="card export-card">
+    <div class="export-icon">⚔️</div>
+    <div class="export-title">{{ 'Wars History' if lang == 'en' else 'سجل الحروب' }}</div>
+    <p class="muted export-desc">{{ 'Export all war records.' if lang == 'en' else 'تصدير سجل الحروب.' }}</p>
+    <a href="/export/wars.csv" class="btn btn-primary btn-sm">⬇ CSV</a>
+  </div>
+
+  <div class="card export-card">
+    <div class="export-icon">🎯</div>
+    <div class="export-title">{{ 'Missions' if lang == 'en' else 'المهام' }}</div>
+    <p class="muted export-desc">{{ 'Export all missions.' if lang == 'en' else 'تصدير المهام.' }}</p>
+    <a href="/export/missions.csv" class="btn btn-primary btn-sm">⬇ CSV</a>
+  </div>
+
+  <div class="card export-card export-card-featured">
+    <div class="export-icon">💾</div>
+    <div class="export-title">{{ 'Full System Backup' if lang == 'en' else 'نسخة احتياطية كاملة' }}</div>
+    <p class="muted export-desc">{{ 'Export members, transfers, leaders, teams, wars, and missions in one file.' if lang == 'en' else 'تصدير كل شيء في ملف واحد.' }}</p>
+    <a href="/export/full-backup.csv" class="btn btn-gold btn-sm">⬇ Full Backup CSV</a>
+  </div>
+</div>
+{% endblock %}

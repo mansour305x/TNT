@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">
+    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.5 10c-.83 0-1.5-.67-1.5-1.5v-5c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5v5c0 .83-.67 1.5-1.5 1.5zM20.5 10H19V8.5c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5-.67 1.5-1.5 1.5zM9.5 14c.83 0 1.5.67 1.5 1.5v5c0 .83-.67 1.5-1.5 1.5S8 21.33 8 20.5v-5c0-.83.67-1.5 1.5-1.5zM3.5 14H5v1.5c0 .83-.67 1.5-1.5 1.5S2 16.33 2 15.5 2.67 14 3.5 14z"/></svg>
+    {{ 'Wars' if lang == 'en' else 'الحروب' }}
+  </h1>
+  <span class="page-count">{{ wars | length }}</span>
+</div>
+
+<div class="card mb-4">
+  <div class="card-header">{{ 'Add War Record' if lang == 'en' else 'تسجيل حرب' }}</div>
+  <div class="card-body">
+    <form method="post" action="/wars/add" class="grid-form">
+      <div class="form-group">
+        <label>{{ 'Opponent' if lang == 'en' else 'الخصم' }} *</label>
+        <input type="text" name="opponent" required class="input-field" placeholder="Alliance / Player name" />
+      </div>
+      <div class="form-group">
+        <label>{{ 'Date' if lang == 'en' else 'التاريخ' }}</label>
+        <input type="date" name="war_date" class="input-field" />
+      </div>
+      <div class="form-group">
+        <label>{{ 'Time' if lang == 'en' else 'الوقت' }}</label>
+        <input type="time" name="war_time" class="input-field" />
+      </div>
+      <div class="form-group">
+        <label>{{ 'Result' if lang == 'en' else 'النتيجة' }}</label>
+        <select name="result" class="input-field">
+          <option value="pending">Pending</option>
+          <option value="win">Win</option>
+          <option value="loss">Loss</option>
+          <option value="draw">Draw</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>{{ 'Our Kills' if lang == 'en' else 'قتلانا' }}</label>
+        <input type="text" name="our_kills" class="input-field" placeholder="Our kills" />
+      </div>
+      <div class="form-group">
+        <label>{{ 'Enemy Kills' if lang == 'en' else 'قتلى العدو' }}</label>
+        <input type="text" name="enemy_kills" class="input-field" placeholder="Enemy kills" />
+      </div>
+      <div class="form-group form-group-full">
+        <label>{{ 'Notes' if lang == 'en' else 'ملاحظات' }}</label>
+        <input type="text" name="notes" class="input-field" placeholder="Optional notes" />
+      </div>
+      <div class="form-group form-group-full">
+        <button type="submit" class="btn btn-primary">+ {{ 'Add War' if lang == 'en' else 'إضافة' }}</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% if wars %}
+<div class="card">
+  <div class="table-scroll">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>{{ 'Opponent' if lang == 'en' else 'الخصم' }}</th>
+          <th>{{ 'Date' if lang == 'en' else 'التاريخ' }}</th>
+          <th>{{ 'Time' if lang == 'en' else 'الوقت' }}</th>
+          <th>{{ 'Result' if lang == 'en' else 'النتيجة' }}</th>
+          <th>{{ 'Our Kills' if lang == 'en' else 'قتلانا' }}</th>
+          <th>{{ 'Enemy Kills' if lang == 'en' else 'قتلى العدو' }}</th>
+          <th>{{ 'Notes' if lang == 'en' else 'ملاحظات' }}</th>
+          <th>{{ 'Actions' if lang == 'en' else 'إجراءات' }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for w in wars %}
+        <tr>
+          <td class="muted">{{ loop.index }}</td>
+          <td><strong>{{ w.opponent }}</strong></td>
+          <td class="muted">{{ w.war_date or '—' }}</td>
+          <td class="muted">{{ w.war_time or '—' }}</td>
+          <td>
+            <span class="badge {% if w.result == 'win' %}badge-win{% elif w.result == 'loss' %}badge-danger{% elif w.result == 'draw' %}badge-outline{% else %}badge-muted{% endif %}">
+              {{ w.result | upper }}
+            </span>
+          </td>
+          <td>{{ w.our_kills or '—' }}</td>
+          <td>{{ w.enemy_kills or '—' }}</td>
+          <td class="muted">{{ w.notes or '—' }}</td>
+          <td>
+            <div class="action-group">
+              <form method="post" action="/wars/{{ w.id }}/update" class="inline-update-form">
+                <select name="result" class="input-field input-xs">
+                  <option value="pending" {% if w.result == 'pending' %}selected{% endif %}>Pending</option>
+                  <option value="win" {% if w.result == 'win' %}selected{% endif %}>Win</option>
+                  <option value="loss" {% if w.result == 'loss' %}selected{% endif %}>Loss</option>
+                  <option value="draw" {% if w.result == 'draw' %}selected{% endif %}>Draw</option>
+                </select>
+                <input type="hidden" name="our_kills" value="{{ w.our_kills or '' }}" />
+                <input type="hidden" name="enemy_kills" value="{{ w.enemy_kills or '' }}" />
+                <input type="hidden" name="notes" value="{{ w.notes or '' }}" />
+                <button type="submit" class="btn btn-secondary btn-xs">✓</button>
+              </form>
+              <form method="post" action="/wars/{{ w.id }}/delete" onsubmit="return confirm('Delete war record?')">
+                <button type="submit" class="btn btn-danger btn-xs">✕</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="empty-state">
+  <div class="empty-icon">⚔️</div>
+  <p>{{ 'No wars recorded yet.' if lang == 'en' else 'لا توجد حروب مسجلة.' }}</p>
+</div>
+{% endif %}
+{% endblock %}

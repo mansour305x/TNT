@@ -421,6 +421,102 @@ def init_db() -> None:
                 config_json TEXT NOT NULL DEFAULT '{}',
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             );
+
+            CREATE TABLE IF NOT EXISTS rally_leaders (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                state_account_id INTEGER,
+                leader_name TEXT NOT NULL,
+                leader_uid TEXT NOT NULL DEFAULT '',
+                rank TEXT NOT NULL DEFAULT '',
+                rally_type TEXT NOT NULL DEFAULT '',
+                power TEXT NOT NULL DEFAULT '',
+                notes TEXT NOT NULL DEFAULT '',
+                created_by INTEGER,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(created_by) REFERENCES users(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS teams (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                state_account_id INTEGER,
+                team_name TEXT NOT NULL,
+                team_type TEXT NOT NULL DEFAULT '',
+                description TEXT NOT NULL DEFAULT '',
+                created_by INTEGER,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(created_by) REFERENCES users(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS team_members (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                team_id INTEGER NOT NULL,
+                member_name TEXT NOT NULL,
+                member_uid TEXT NOT NULL DEFAULT '',
+                role TEXT NOT NULL DEFAULT 'member',
+                notes TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(team_id) REFERENCES teams(id) ON DELETE CASCADE
+            );
+
+            CREATE TABLE IF NOT EXISTS discord_settings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                state_account_id INTEGER UNIQUE,
+                webhook_url TEXT NOT NULL DEFAULT '',
+                notify_transfers INTEGER NOT NULL DEFAULT 1,
+                notify_leaders INTEGER NOT NULL DEFAULT 1,
+                notify_teams INTEGER NOT NULL DEFAULT 1,
+                notify_members INTEGER NOT NULL DEFAULT 1,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE IF NOT EXISTS resources (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                state_account_id INTEGER,
+                resource_type TEXT NOT NULL,
+                quantity TEXT NOT NULL DEFAULT '0',
+                notes TEXT NOT NULL DEFAULT '',
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                created_by INTEGER,
+                FOREIGN KEY(created_by) REFERENCES users(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS missions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                state_account_id INTEGER,
+                mission_name TEXT NOT NULL,
+                description TEXT NOT NULL DEFAULT '',
+                reward TEXT NOT NULL DEFAULT '',
+                status TEXT NOT NULL DEFAULT 'active',
+                achieved_by TEXT NOT NULL DEFAULT '',
+                due_date TEXT NOT NULL DEFAULT '',
+                created_by INTEGER,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(created_by) REFERENCES users(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS wars (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                state_account_id INTEGER,
+                opponent TEXT NOT NULL,
+                war_date TEXT NOT NULL DEFAULT '',
+                war_time TEXT NOT NULL DEFAULT '',
+                result TEXT NOT NULL DEFAULT 'pending',
+                our_kills TEXT NOT NULL DEFAULT '',
+                enemy_kills TEXT NOT NULL DEFAULT '',
+                notes TEXT NOT NULL DEFAULT '',
+                created_by INTEGER,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(created_by) REFERENCES users(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS activity_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                state_account_id INTEGER,
+                user_id INTEGER,
+                action TEXT NOT NULL,
+                details TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
             """
         )
 
@@ -2957,6 +3053,577 @@ async def api_features(request: web.Request) -> web.Response:
     return web.json_response({"features": features})
 
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# DISCORD WEBHOOK HELPER
+# ═══════════════════════════════════════════════════════════════════════════════
+
+async def send_discord_webhook(webhook_url: str, content: str) -> bool:
+    if not webhook_url or not webhook_url.startswith("https://"):
+        return False
+    try:
+        async with ClientSession() as session:
+            resp = await session.post(
+                webhook_url,
+                json={"content": content, "username": "TNT States System"},
+                timeout=aiohttp.ClientTimeout(total=10),
+            )
+            return resp.status in (200, 204)
+    except Exception:
+        return False
+
+
+def log_activity(conn, state_account_id, user_id, action: str, details: str = "") -> None:
+    conn.execute(
+        "INSERT INTO activity_log (state_account_id, user_id, action, details) VALUES (?, ?, ?, ?)",
+        (state_account_id, user_id, action, details),
+    )
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# RALLY LEADERS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+async def rally_leaders_page(request: web.Request) -> web.Response:
+    user = get_current_user(request)
+    if not user or not user["is_admin"]:
+        return flash_response("/portal", translate_request(request, "admin_required"), "error")
+    with get_db() as conn:
+        leaders = conn.execute(
+            "SELECT id, leader_name, leader_uid, rank, rally_type, power, notes, created_at FROM rally_leaders WHERE state_account_id IS NULL ORDER BY id DESC"
+        ).fetchall()
+    return render_template(request, "rally_leaders.html", {
+        "title": "Rally Leaders | TNT",
+        "leaders": [dict(r) for r in leaders],
+    })
+
+
+async def rally_leader_add(request: web.Request) -> web.StreamResponse:
+    user = get_current_user(request)
+    if not user or not user["is_admin"]:
+        return flash_response("/portal", translate_request(request, "admin_required"), "error")
+    data = await request.post()
+    leader_name = str(data.get("leader_name", "")).strip()
+    leader_uid = str(data.get("leader_uid", "")).strip()
+    rank = str(data.get("rank", "")).strip()
+    rally_type = str(data.get("rally_type", "")).strip()
+    power = str(data.get("power", "")).strip()
+    notes = str(data.get("notes", "")).strip()
+    if not leader_name:
+        return flash_response("/rally-leaders", "Leader name is required", "error")
+    with get_db() as conn:
+        conn.execute(
+            "INSERT INTO rally_leaders (leader_name, leader_uid, rank, rally_type, power, notes, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (leader_name, leader_uid, rank, rally_type, power, notes, user["id"]),
+        )
+        log_activity(conn, None, user["id"], "add_rally_leader", f"Name: {leader_name}")
+    return flash_response("/rally-leaders", "Rally leader added successfully", "success")
+
+
+async def rally_leader_delete(request: web.Request) -> web.StreamResponse:
+    user = get_current_user(request)
+    if not user or not user["is_admin"]:
+        return flash_response("/portal", translate_request(request, "admin_required"), "error")
+    leader_id = int(request.match_info["leader_id"])
+    with get_db() as conn:
+        conn.execute("DELETE FROM rally_leaders WHERE id = ? AND state_account_id IS NULL", (leader_id,))
+    return flash_response("/rally-leaders", "Rally leader deleted", "info")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TEAMS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+async def teams_page(request: web.Request) -> web.Response:
+    user = get_current_user(request)
+    if not user or not user["is_admin"]:
+        return flash_response("/portal", translate_request(request, "admin_required"), "error")
+    with get_db() as conn:
+        teams = conn.execute(
+            "SELECT id, team_name, team_type, description, created_at FROM teams WHERE state_account_id IS NULL ORDER BY id DESC"
+        ).fetchall()
+        team_ids = [t["id"] for t in teams]
+        members_by_team: dict = {}
+        if team_ids:
+            placeholders = ",".join("?" * len(team_ids))
+            members = conn.execute(
+                f"SELECT id, team_id, member_name, member_uid, role FROM team_members WHERE team_id IN ({placeholders}) ORDER BY id ASC",
+                team_ids,
+            ).fetchall()
+            for m in members:
+                members_by_team.setdefault(int(m["team_id"]), []).append(dict(m))
+    teams_list = []
+    for t in teams:
+        td = dict(t)
+        td["members"] = members_by_team.get(int(t["id"]), [])
+        teams_list.append(td)
+    return render_template(request, "teams.html", {
+        "title": "Teams | TNT",
+        "teams": teams_list,
+    })
+
+
+async def team_add(request: web.Request) -> web.StreamResponse:
+    user = get_current_user(request)
+    if not user or not user["is_admin"]:
+        return flash_response("/portal", translate_request(request, "admin_required"), "error")
+    data = await request.post()
+    team_name = str(data.get("team_name", "")).strip()
+    team_type = str(data.get("team_type", "general")).strip()
+    description = str(data.get("description", "")).strip()
+    if not team_name:
+        return flash_response("/teams", "Team name is required", "error")
+    with get_db() as conn:
+        conn.execute(
+            "INSERT INTO teams (team_name, team_type, description, created_by) VALUES (?, ?, ?, ?)",
+            (team_name, team_type, description, user["id"]),
+        )
+        log_activity(conn, None, user["id"], "add_team", f"Team: {team_name}")
+    return flash_response("/teams", "Team created successfully", "success")
+
+
+async def team_delete(request: web.Request) -> web.StreamResponse:
+    user = get_current_user(request)
+    if not user or not user["is_admin"]:
+        return flash_response("/portal", translate_request(request, "admin_required"), "error")
+    team_id = int(request.match_info["team_id"])
+    with get_db() as conn:
+        conn.execute("DELETE FROM teams WHERE id = ? AND state_account_id IS NULL", (team_id,))
+    return flash_response("/teams", "Team deleted", "info")
+
+
+async def team_member_add(request: web.Request) -> web.StreamResponse:
+    user = get_current_user(request)
+    if not user or not user["is_admin"]:
+        return flash_response("/portal", translate_request(request, "admin_required"), "error")
+    team_id = int(request.match_info["team_id"])
+    data = await request.post()
+    member_name = str(data.get("member_name", "")).strip()
+    member_uid = str(data.get("member_uid", "")).strip()
+    role = str(data.get("role", "member")).strip()
+    notes = str(data.get("notes", "")).strip()
+    if not member_name:
+        return flash_response("/teams", "Member name is required", "error")
+    with get_db() as conn:
+        conn.execute(
+            "INSERT INTO team_members (team_id, member_name, member_uid, role, notes) VALUES (?, ?, ?, ?, ?)",
+            (team_id, member_name, member_uid, role, notes),
+        )
+    return flash_response("/teams", "Member added to team", "success")
+
+
+async def team_member_delete(request: web.Request) -> web.StreamResponse:
+    user = get_current_user(request)
+    if not user or not user["is_admin"]:
+        return flash_response("/portal", translate_request(request, "admin_required"), "error")
+    member_id = int(request.match_info["member_id"])
+    with get_db() as conn:
+        conn.execute("DELETE FROM team_members WHERE id = ?", (member_id,))
+    return flash_response("/teams", "Team member removed", "info")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DISCORD SETTINGS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+async def discord_settings_page(request: web.Request) -> web.Response:
+    user = get_current_user(request)
+    if not user or not user["is_admin"]:
+        return flash_response("/portal", translate_request(request, "admin_required"), "error")
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT * FROM discord_settings WHERE state_account_id = 0 LIMIT 1"
+        ).fetchone()
+    settings = dict(row) if row else {"webhook_url": "", "notify_transfers": 1, "notify_leaders": 1, "notify_teams": 1, "notify_members": 1}
+    return render_template(request, "discord_settings.html", {
+        "title": "Discord Integration | TNT",
+        "settings": settings,
+    })
+
+
+async def discord_settings_save(request: web.Request) -> web.StreamResponse:
+    user = get_current_user(request)
+    if not user or not user["is_admin"]:
+        return flash_response("/portal", translate_request(request, "admin_required"), "error")
+    data = await request.post()
+    webhook_url = str(data.get("webhook_url", "")).strip()
+    notify_transfers = 1 if data.get("notify_transfers") else 0
+    notify_leaders = 1 if data.get("notify_leaders") else 0
+    notify_teams = 1 if data.get("notify_teams") else 0
+    notify_members = 1 if data.get("notify_members") else 0
+    with get_db() as conn:
+        conn.execute(
+            """INSERT INTO discord_settings (state_account_id, webhook_url, notify_transfers, notify_leaders, notify_teams, notify_members)
+               VALUES (0, ?, ?, ?, ?, ?)
+               ON CONFLICT(state_account_id) DO UPDATE SET
+               webhook_url=excluded.webhook_url,
+               notify_transfers=excluded.notify_transfers,
+               notify_leaders=excluded.notify_leaders,
+               notify_teams=excluded.notify_teams,
+               notify_members=excluded.notify_members,
+               updated_at=CURRENT_TIMESTAMP""",
+            (webhook_url, notify_transfers, notify_leaders, notify_teams, notify_members),
+        )
+    return flash_response("/discord-settings", "Discord settings saved", "success")
+
+
+async def discord_send_message(request: web.Request) -> web.StreamResponse:
+    user = get_current_user(request)
+    if not user or not user["is_admin"]:
+        return flash_response("/portal", translate_request(request, "admin_required"), "error")
+    data = await request.post()
+    message = str(data.get("message", "")).strip()
+    if not message:
+        return flash_response("/discord-settings", "Message cannot be empty", "error")
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT webhook_url FROM discord_settings WHERE state_account_id = 0 LIMIT 1"
+        ).fetchone()
+    webhook_url = row["webhook_url"] if row else ""
+    if not webhook_url:
+        return flash_response("/discord-settings", "No webhook URL configured", "error")
+    import asyncio as _aio
+    loop = _aio.get_event_loop()
+    if loop.is_running():
+        _aio.ensure_future(send_discord_webhook(webhook_url, message))
+        return flash_response("/discord-settings", "Message queued for Discord", "info")
+    sent = loop.run_until_complete(send_discord_webhook(webhook_url, message))
+    if sent:
+        return flash_response("/discord-settings", "Message sent to Discord successfully", "success")
+    return flash_response("/discord-settings", "Failed to send — check webhook URL", "error")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# RESOURCES
+# ═══════════════════════════════════════════════════════════════════════════════
+
+async def resources_page(request: web.Request) -> web.Response:
+    user = get_current_user(request)
+    if not user or not user["is_admin"]:
+        return flash_response("/portal", translate_request(request, "admin_required"), "error")
+    with get_db() as conn:
+        resources = conn.execute(
+            "SELECT id, resource_type, quantity, notes, updated_at FROM resources WHERE state_account_id IS NULL ORDER BY resource_type ASC"
+        ).fetchall()
+    return render_template(request, "resources.html", {
+        "title": "Resources | TNT",
+        "resources": [dict(r) for r in resources],
+    })
+
+
+async def resource_save(request: web.Request) -> web.StreamResponse:
+    user = get_current_user(request)
+    if not user or not user["is_admin"]:
+        return flash_response("/portal", translate_request(request, "admin_required"), "error")
+    data = await request.post()
+    resource_type = str(data.get("resource_type", "")).strip()
+    quantity = str(data.get("quantity", "0")).strip()
+    notes = str(data.get("notes", "")).strip()
+    if not resource_type:
+        return flash_response("/resources", "Resource type is required", "error")
+    with get_db() as conn:
+        conn.execute(
+            "INSERT INTO resources (state_account_id, resource_type, quantity, notes, created_by) VALUES (NULL, ?, ?, ?, ?)",
+            (resource_type, quantity, notes, user["id"]),
+        )
+    return flash_response("/resources", "Resource saved", "success")
+
+
+async def resource_delete(request: web.Request) -> web.StreamResponse:
+    user = get_current_user(request)
+    if not user or not user["is_admin"]:
+        return flash_response("/portal", translate_request(request, "admin_required"), "error")
+    resource_id = int(request.match_info["resource_id"])
+    with get_db() as conn:
+        conn.execute("DELETE FROM resources WHERE id = ? AND state_account_id IS NULL", (resource_id,))
+    return flash_response("/resources", "Resource deleted", "info")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# MISSIONS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+async def missions_page(request: web.Request) -> web.Response:
+    user = get_current_user(request)
+    if not user or not user["is_admin"]:
+        return flash_response("/portal", translate_request(request, "admin_required"), "error")
+    with get_db() as conn:
+        missions = conn.execute(
+            "SELECT id, mission_name, description, reward, status, achieved_by, due_date, created_at FROM missions WHERE state_account_id IS NULL ORDER BY id DESC"
+        ).fetchall()
+    return render_template(request, "missions.html", {
+        "title": "Missions | TNT",
+        "missions": [dict(r) for r in missions],
+    })
+
+
+async def mission_add(request: web.Request) -> web.StreamResponse:
+    user = get_current_user(request)
+    if not user or not user["is_admin"]:
+        return flash_response("/portal", translate_request(request, "admin_required"), "error")
+    data = await request.post()
+    mission_name = str(data.get("mission_name", "")).strip()
+    description = str(data.get("description", "")).strip()
+    reward = str(data.get("reward", "")).strip()
+    due_date = str(data.get("due_date", "")).strip()
+    if not mission_name:
+        return flash_response("/missions", "Mission name is required", "error")
+    with get_db() as conn:
+        conn.execute(
+            "INSERT INTO missions (state_account_id, mission_name, description, reward, due_date, created_by) VALUES (NULL, ?, ?, ?, ?, ?)",
+            (mission_name, description, reward, due_date, user["id"]),
+        )
+    return flash_response("/missions", "Mission added successfully", "success")
+
+
+async def mission_update_status(request: web.Request) -> web.StreamResponse:
+    user = get_current_user(request)
+    if not user or not user["is_admin"]:
+        return flash_response("/portal", translate_request(request, "admin_required"), "error")
+    mission_id = int(request.match_info["mission_id"])
+    data = await request.post()
+    status = str(data.get("status", "active")).strip()
+    achieved_by = str(data.get("achieved_by", "")).strip()
+    with get_db() as conn:
+        conn.execute(
+            "UPDATE missions SET status = ?, achieved_by = ? WHERE id = ? AND state_account_id IS NULL",
+            (status, achieved_by, mission_id),
+        )
+    return flash_response("/missions", "Mission updated", "success")
+
+
+async def mission_delete(request: web.Request) -> web.StreamResponse:
+    user = get_current_user(request)
+    if not user or not user["is_admin"]:
+        return flash_response("/portal", translate_request(request, "admin_required"), "error")
+    mission_id = int(request.match_info["mission_id"])
+    with get_db() as conn:
+        conn.execute("DELETE FROM missions WHERE id = ? AND state_account_id IS NULL", (mission_id,))
+    return flash_response("/missions", "Mission deleted", "info")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# WARS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+async def wars_page(request: web.Request) -> web.Response:
+    user = get_current_user(request)
+    if not user or not user["is_admin"]:
+        return flash_response("/portal", translate_request(request, "admin_required"), "error")
+    with get_db() as conn:
+        wars = conn.execute(
+            "SELECT id, opponent, war_date, war_time, result, our_kills, enemy_kills, notes, created_at FROM wars WHERE state_account_id IS NULL ORDER BY id DESC"
+        ).fetchall()
+    return render_template(request, "wars.html", {
+        "title": "Wars | TNT",
+        "wars": [dict(r) for r in wars],
+    })
+
+
+async def war_add(request: web.Request) -> web.StreamResponse:
+    user = get_current_user(request)
+    if not user or not user["is_admin"]:
+        return flash_response("/portal", translate_request(request, "admin_required"), "error")
+    data = await request.post()
+    opponent = str(data.get("opponent", "")).strip()
+    war_date = str(data.get("war_date", "")).strip()
+    war_time = str(data.get("war_time", "")).strip()
+    result = str(data.get("result", "pending")).strip()
+    our_kills = str(data.get("our_kills", "")).strip()
+    enemy_kills = str(data.get("enemy_kills", "")).strip()
+    notes = str(data.get("notes", "")).strip()
+    if not opponent:
+        return flash_response("/wars", "Opponent is required", "error")
+    with get_db() as conn:
+        conn.execute(
+            "INSERT INTO wars (state_account_id, opponent, war_date, war_time, result, our_kills, enemy_kills, notes, created_by) VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (opponent, war_date, war_time, result, our_kills, enemy_kills, notes, user["id"]),
+        )
+    return flash_response("/wars", "War record added", "success")
+
+
+async def war_update(request: web.Request) -> web.StreamResponse:
+    user = get_current_user(request)
+    if not user or not user["is_admin"]:
+        return flash_response("/portal", translate_request(request, "admin_required"), "error")
+    war_id = int(request.match_info["war_id"])
+    data = await request.post()
+    result = str(data.get("result", "pending")).strip()
+    our_kills = str(data.get("our_kills", "")).strip()
+    enemy_kills = str(data.get("enemy_kills", "")).strip()
+    notes = str(data.get("notes", "")).strip()
+    with get_db() as conn:
+        conn.execute(
+            "UPDATE wars SET result=?, our_kills=?, enemy_kills=?, notes=? WHERE id=? AND state_account_id IS NULL",
+            (result, our_kills, enemy_kills, notes, war_id),
+        )
+    return flash_response("/wars", "War updated", "success")
+
+
+async def war_delete(request: web.Request) -> web.StreamResponse:
+    user = get_current_user(request)
+    if not user or not user["is_admin"]:
+        return flash_response("/portal", translate_request(request, "admin_required"), "error")
+    war_id = int(request.match_info["war_id"])
+    with get_db() as conn:
+        conn.execute("DELETE FROM wars WHERE id = ? AND state_account_id IS NULL", (war_id,))
+    return flash_response("/wars", "War record deleted", "info")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ENHANCED STATS API
+# ═══════════════════════════════════════════════════════════════════════════════
+
+async def api_stats(request: web.Request) -> web.Response:
+    user = get_current_user(request)
+    if not user or not user["is_admin"]:
+        return web.json_response({"error": "Unauthorized"}, status=403)
+    with get_db() as conn:
+        members_count = conn.execute("SELECT COUNT(*) c FROM member_records WHERE state_account_id IS NULL").fetchone()["c"]
+        transfers_count = conn.execute("SELECT COUNT(*) c FROM transfer_records WHERE state_account_id IS NULL").fetchone()["c"]
+        leaders_count = conn.execute("SELECT COUNT(*) c FROM rally_leaders WHERE state_account_id IS NULL").fetchone()["c"]
+        teams_count = conn.execute("SELECT COUNT(*) c FROM teams WHERE state_account_id IS NULL").fetchone()["c"]
+        missions_active = conn.execute("SELECT COUNT(*) c FROM missions WHERE status='active' AND state_account_id IS NULL").fetchone()["c"]
+        wars_count = conn.execute("SELECT COUNT(*) c FROM wars WHERE state_account_id IS NULL").fetchone()["c"]
+        wars_won = conn.execute("SELECT COUNT(*) c FROM wars WHERE result='win' AND state_account_id IS NULL").fetchone()["c"]
+        users_count = conn.execute("SELECT COUNT(*) c FROM users").fetchone()["c"]
+        state_accounts_count = conn.execute("SELECT COUNT(*) c FROM state_accounts").fetchone()["c"]
+        recent_activities = conn.execute(
+            "SELECT action, details, created_at FROM activity_log ORDER BY id DESC LIMIT 10"
+        ).fetchall()
+    return web.json_response({
+        "members": members_count,
+        "transfers": transfers_count,
+        "rally_leaders": leaders_count,
+        "teams": teams_count,
+        "missions_active": missions_active,
+        "wars": wars_count,
+        "wars_won": wars_won,
+        "users": users_count,
+        "state_accounts": state_accounts_count,
+        "recent_activities": [dict(r) for r in recent_activities],
+    })
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# EXPORT ENGINE
+# ═══════════════════════════════════════════════════════════════════════════════
+
+async def export_page(request: web.Request) -> web.Response:
+    user = get_current_user(request)
+    if not user or not user["is_admin"]:
+        return flash_response("/portal", translate_request(request, "admin_required"), "error")
+    return render_template(request, "export_center.html", {"title": "Export Center | TNT"})
+
+
+async def export_rally_leaders_csv(request: web.Request) -> web.Response:
+    user = get_current_user(request)
+    if not user or not user["is_admin"]:
+        return flash_response("/portal", translate_request(request, "admin_required"), "error")
+    with get_db() as conn:
+        rows = conn.execute("SELECT id, leader_name, leader_uid, rank, rally_type, power, notes, created_at FROM rally_leaders WHERE state_account_id IS NULL ORDER BY id ASC").fetchall()
+    out = io.StringIO()
+    w = csv.writer(out)
+    w.writerow(["ID", "Leader Name", "Leader UID", "Rank", "Rally Type", "Power", "Notes", "Created At"])
+    for r in rows:
+        w.writerow([r["id"], r["leader_name"], r["leader_uid"], r["rank"], r["rally_type"], r["power"], r["notes"], r["created_at"]])
+    return web.Response(text=out.getvalue(), content_type="text/csv",
+                        headers={"Content-Disposition": "attachment; filename=rally_leaders.csv"})
+
+
+async def export_teams_csv(request: web.Request) -> web.Response:
+    user = get_current_user(request)
+    if not user or not user["is_admin"]:
+        return flash_response("/portal", translate_request(request, "admin_required"), "error")
+    with get_db() as conn:
+        teams = conn.execute("SELECT id, team_name, team_type, description, created_at FROM teams WHERE state_account_id IS NULL ORDER BY id ASC").fetchall()
+        members = conn.execute("SELECT tm.id, t.team_name, tm.member_name, tm.member_uid, tm.role, tm.notes FROM team_members tm JOIN teams t ON t.id = tm.team_id WHERE t.state_account_id IS NULL ORDER BY tm.id ASC").fetchall()
+    out = io.StringIO()
+    w = csv.writer(out)
+    w.writerow(["## TEAMS ##"])
+    w.writerow(["ID", "Team Name", "Type", "Description", "Created At"])
+    for r in teams:
+        w.writerow([r["id"], r["team_name"], r["team_type"], r["description"], r["created_at"]])
+    w.writerow([])
+    w.writerow(["## TEAM MEMBERS ##"])
+    w.writerow(["ID", "Team Name", "Member Name", "Member UID", "Role", "Notes"])
+    for r in members:
+        w.writerow([r["id"], r["team_name"], r["member_name"], r["member_uid"], r["role"], r["notes"]])
+    return web.Response(text=out.getvalue(), content_type="text/csv",
+                        headers={"Content-Disposition": "attachment; filename=teams.csv"})
+
+
+async def export_wars_csv(request: web.Request) -> web.Response:
+    user = get_current_user(request)
+    if not user or not user["is_admin"]:
+        return flash_response("/portal", translate_request(request, "admin_required"), "error")
+    with get_db() as conn:
+        rows = conn.execute("SELECT id, opponent, war_date, war_time, result, our_kills, enemy_kills, notes, created_at FROM wars WHERE state_account_id IS NULL ORDER BY id ASC").fetchall()
+    out = io.StringIO()
+    w = csv.writer(out)
+    w.writerow(["ID", "Opponent", "Date", "Time", "Result", "Our Kills", "Enemy Kills", "Notes", "Created At"])
+    for r in rows:
+        w.writerow([r["id"], r["opponent"], r["war_date"], r["war_time"], r["result"], r["our_kills"], r["enemy_kills"], r["notes"], r["created_at"]])
+    return web.Response(text=out.getvalue(), content_type="text/csv",
+                        headers={"Content-Disposition": "attachment; filename=wars.csv"})
+
+
+async def export_missions_csv(request: web.Request) -> web.Response:
+    user = get_current_user(request)
+    if not user or not user["is_admin"]:
+        return flash_response("/portal", translate_request(request, "admin_required"), "error")
+    with get_db() as conn:
+        rows = conn.execute("SELECT id, mission_name, description, reward, status, achieved_by, due_date, created_at FROM missions WHERE state_account_id IS NULL ORDER BY id ASC").fetchall()
+    out = io.StringIO()
+    w = csv.writer(out)
+    w.writerow(["ID", "Mission Name", "Description", "Reward", "Status", "Achieved By", "Due Date", "Created At"])
+    for r in rows:
+        w.writerow([r["id"], r["mission_name"], r["description"], r["reward"], r["status"], r["achieved_by"], r["due_date"], r["created_at"]])
+    return web.Response(text=out.getvalue(), content_type="text/csv",
+                        headers={"Content-Disposition": "attachment; filename=missions.csv"})
+
+
+async def export_full_backup_csv(request: web.Request) -> web.Response:
+    user = get_current_user(request)
+    if not user or not user["is_admin"]:
+        return flash_response("/portal", translate_request(request, "admin_required"), "error")
+    with get_db() as conn:
+        members = conn.execute("SELECT id, member_name, member_uid, alliance, rank, notes, created_at FROM member_records WHERE state_account_id IS NULL ORDER BY id ASC").fetchall()
+        transfers = conn.execute("SELECT id, member_name, member_uid, power, furnace, current_state, invite_type, future_alliance, created_at FROM transfer_records WHERE state_account_id IS NULL ORDER BY id ASC").fetchall()
+        leaders = conn.execute("SELECT id, leader_name, leader_uid, rank, rally_type, power, created_at FROM rally_leaders WHERE state_account_id IS NULL ORDER BY id ASC").fetchall()
+        teams = conn.execute("SELECT id, team_name, team_type, created_at FROM teams WHERE state_account_id IS NULL ORDER BY id ASC").fetchall()
+        wars = conn.execute("SELECT id, opponent, war_date, result, our_kills, enemy_kills FROM wars WHERE state_account_id IS NULL ORDER BY id ASC").fetchall()
+        missions = conn.execute("SELECT id, mission_name, status, reward, due_date FROM missions WHERE state_account_id IS NULL ORDER BY id ASC").fetchall()
+    out = io.StringIO()
+    w = csv.writer(out)
+    w.writerow(["=== TNT STATES SYSTEM — FULL BACKUP ==="])
+    w.writerow([])
+    w.writerow(["## MEMBERS"])
+    w.writerow(["ID", "Name", "UID", "Alliance", "Rank", "Notes", "Created At"])
+    for r in members: w.writerow(list(r))
+    w.writerow([])
+    w.writerow(["## TRANSFERS"])
+    w.writerow(["ID", "Name", "UID", "Power", "Furnace", "Current State", "Invite Type", "Future Alliance", "Created At"])
+    for r in transfers: w.writerow(list(r))
+    w.writerow([])
+    w.writerow(["## RALLY LEADERS"])
+    w.writerow(["ID", "Name", "UID", "Rank", "Rally Type", "Power", "Created At"])
+    for r in leaders: w.writerow(list(r))
+    w.writerow([])
+    w.writerow(["## TEAMS"])
+    w.writerow(["ID", "Name", "Type", "Created At"])
+    for r in teams: w.writerow(list(r))
+    w.writerow([])
+    w.writerow(["## WARS"])
+    w.writerow(["ID", "Opponent", "Date", "Result", "Our Kills", "Enemy Kills"])
+    for r in wars: w.writerow(list(r))
+    w.writerow([])
+    w.writerow(["## MISSIONS"])
+    w.writerow(["ID", "Name", "Status", "Reward", "Due Date"])
+    for r in missions: w.writerow(list(r))
+    return web.Response(text=out.getvalue(), content_type="text/csv",
+                        headers={"Content-Disposition": "attachment; filename=tnt_full_backup.csv"})
+
+
 @web.middleware
 async def security_headers_middleware(request: web.Request, handler):
     try:
@@ -3055,6 +3722,49 @@ def build_app() -> web.Application:
     app.router.add_post("/owner/state-accounts/{sa_id}/delete", owner_delete_state_account)
     app.router.add_post("/owner/state-accounts/{sa_id}/reset-password", owner_reset_state_password)
     app.router.add_get("/api/features", api_features)
+    app.router.add_get("/api/stats", api_stats)
+
+    # Rally Leaders
+    app.router.add_get("/rally-leaders", rally_leaders_page)
+    app.router.add_post("/rally-leaders/add", rally_leader_add)
+    app.router.add_post("/rally-leaders/{leader_id}/delete", rally_leader_delete)
+
+    # Teams
+    app.router.add_get("/teams", teams_page)
+    app.router.add_post("/teams/add", team_add)
+    app.router.add_post("/teams/{team_id}/delete", team_delete)
+    app.router.add_post("/teams/{team_id}/members/add", team_member_add)
+    app.router.add_post("/teams/members/{member_id}/delete", team_member_delete)
+
+    # Discord
+    app.router.add_get("/discord-settings", discord_settings_page)
+    app.router.add_post("/discord-settings/save", discord_settings_save)
+    app.router.add_post("/discord-settings/send", discord_send_message)
+
+    # Resources
+    app.router.add_get("/resources", resources_page)
+    app.router.add_post("/resources/save", resource_save)
+    app.router.add_post("/resources/{resource_id}/delete", resource_delete)
+
+    # Missions
+    app.router.add_get("/missions", missions_page)
+    app.router.add_post("/missions/add", mission_add)
+    app.router.add_post("/missions/{mission_id}/status", mission_update_status)
+    app.router.add_post("/missions/{mission_id}/delete", mission_delete)
+
+    # Wars
+    app.router.add_get("/wars", wars_page)
+    app.router.add_post("/wars/add", war_add)
+    app.router.add_post("/wars/{war_id}/update", war_update)
+    app.router.add_post("/wars/{war_id}/delete", war_delete)
+
+    # Export Center
+    app.router.add_get("/export", export_page)
+    app.router.add_get("/export/rally-leaders.csv", export_rally_leaders_csv)
+    app.router.add_get("/export/teams.csv", export_teams_csv)
+    app.router.add_get("/export/wars.csv", export_wars_csv)
+    app.router.add_get("/export/missions.csv", export_missions_csv)
+    app.router.add_get("/export/full-backup.csv", export_full_backup_csv)
 
     return app
 

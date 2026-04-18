@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">
+    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+    {{ 'Missions' if lang == 'en' else 'المهام' }}
+  </h1>
+  <span class="page-count">{{ missions | length }}</span>
+</div>
+
+<div class="card mb-4">
+  <div class="card-header">{{ 'Add Mission' if lang == 'en' else 'إضافة مهمة' }}</div>
+  <div class="card-body">
+    <form method="post" action="/missions/add" class="grid-form">
+      <div class="form-group">
+        <label>{{ 'Mission Name' if lang == 'en' else 'اسم المهمة' }} *</label>
+        <input type="text" name="mission_name" required class="input-field" placeholder="Mission name" />
+      </div>
+      <div class="form-group">
+        <label>{{ 'Reward' if lang == 'en' else 'المكافأة' }}</label>
+        <input type="text" name="reward" class="input-field" placeholder="Reward description" />
+      </div>
+      <div class="form-group">
+        <label>{{ 'Due Date' if lang == 'en' else 'تاريخ الانتهاء' }}</label>
+        <input type="date" name="due_date" class="input-field" />
+      </div>
+      <div class="form-group form-group-full">
+        <label>{{ 'Description' if lang == 'en' else 'الوصف' }}</label>
+        <textarea name="description" class="input-field" rows="2" placeholder="Optional description"></textarea>
+      </div>
+      <div class="form-group form-group-full">
+        <button type="submit" class="btn btn-primary">+ {{ 'Add Mission' if lang == 'en' else 'إضافة' }}</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% if missions %}
+<div class="missions-list">
+  {% for m in missions %}
+  <div class="card mission-card mission-{{ m.status }}">
+    <div class="mission-card-header">
+      <div class="mission-info">
+        <strong class="mission-name">{{ m.mission_name }}</strong>
+        <span class="mission-status-badge status-{{ m.status }}">{{ m.status | upper }}</span>
+      </div>
+      <div class="mission-actions">
+        <form method="post" action="/missions/{{ m.id }}/delete" onsubmit="return confirm('Delete mission?')" style="display:inline">
+          <button type="submit" class="btn btn-danger btn-sm">✕</button>
+        </form>
+      </div>
+    </div>
+    {% if m.description %}
+    <p class="muted mission-desc">{{ m.description }}</p>
+    {% endif %}
+    <div class="mission-meta">
+      {% if m.reward %}<span class="meta-chip">🏆 {{ m.reward }}</span>{% endif %}
+      {% if m.due_date %}<span class="meta-chip">📅 {{ m.due_date }}</span>{% endif %}
+      {% if m.achieved_by %}<span class="meta-chip">✅ {{ m.achieved_by }}</span>{% endif %}
+    </div>
+    <form method="post" action="/missions/{{ m.id }}/status" class="mission-status-form">
+      <select name="status" class="input-field input-sm">
+        <option value="active" {% if m.status == 'active' %}selected{% endif %}>Active</option>
+        <option value="completed" {% if m.status == 'completed' %}selected{% endif %}>Completed</option>
+        <option value="failed" {% if m.status == 'failed' %}selected{% endif %}>Failed</option>
+        <option value="pending" {% if m.status == 'pending' %}selected{% endif %}>Pending</option>
+      </select>
+      <input type="text" name="achieved_by" class="input-field input-sm" value="{{ m.achieved_by or '' }}" placeholder="{{ 'Achieved by...' if lang == 'en' else 'أنجزه...' }}" />
+      <button type="submit" class="btn btn-secondary btn-sm">{{ 'Update' if lang == 'en' else 'تحديث' }}</button>
+    </form>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="empty-state">
+  <div class="empty-icon">🎯</div>
+  <p>{{ 'No missions added yet.' if lang == 'en' else 'لا توجد مهام بعد.' }}</p>
+</div>
+{% endif %}
+{% endblock %}

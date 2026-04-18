@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">
+    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+    {{ 'Rally Leaders' if lang == 'en' else 'قادة التجمع' }}
+  </h1>
+  <span class="page-count">{{ leaders | length }}</span>
+</div>
+
+<div class="card mb-4">
+  <div class="card-header">{{ 'Add Rally Leader' if lang == 'en' else 'إضافة قائد تجمع' }}</div>
+  <div class="card-body">
+    <form method="post" action="/rally-leaders/add" class="grid-form">
+      <div class="form-group">
+        <label>{{ 'Leader Name' if lang == 'en' else 'اسم القائد' }} *</label>
+        <input type="text" name="leader_name" required class="input-field" placeholder="Leader Name" />
+      </div>
+      <div class="form-group">
+        <label>{{ 'Leader UID' if lang == 'en' else 'معرف القائد' }}</label>
+        <input type="text" name="leader_uid" class="input-field" placeholder="UID" />
+      </div>
+      <div class="form-group">
+        <label>{{ 'Rank' if lang == 'en' else 'الرتبة' }}</label>
+        <input type="text" name="rank" class="input-field" placeholder="e.g. R5, R4" />
+      </div>
+      <div class="form-group">
+        <label>{{ 'Rally Type' if lang == 'en' else 'نوع التجمع' }}</label>
+        <select name="rally_type" class="input-field">
+          <option value="">-- Select --</option>
+          <option value="Monster">Monster</option>
+          <option value="Player">Player</option>
+          <option value="City">City</option>
+          <option value="Camp">Camp</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>{{ 'Power' if lang == 'en' else 'القوة' }}</label>
+        <input type="text" name="power" class="input-field" placeholder="e.g. 150M" />
+      </div>
+      <div class="form-group">
+        <label>{{ 'Notes' if lang == 'en' else 'ملاحظات' }}</label>
+        <input type="text" name="notes" class="input-field" placeholder="Optional notes" />
+      </div>
+      <div class="form-group form-group-full">
+        <button type="submit" class="btn btn-primary">+ {{ 'Add Leader' if lang == 'en' else 'إضافة' }}</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% if leaders %}
+<div class="card">
+  <div class="card-header">{{ 'Leaders List' if lang == 'en' else 'قائمة القادة' }}</div>
+  <div class="table-scroll">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>{{ 'Name' if lang == 'en' else 'الاسم' }}</th>
+          <th>UID</th>
+          <th>{{ 'Rank' if lang == 'en' else 'الرتبة' }}</th>
+          <th>{{ 'Type' if lang == 'en' else 'النوع' }}</th>
+          <th>{{ 'Power' if lang == 'en' else 'القوة' }}</th>
+          <th>{{ 'Notes' if lang == 'en' else 'ملاحظات' }}</th>
+          <th>{{ 'Added' if lang == 'en' else 'أضيف' }}</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for l in leaders %}
+        <tr>
+          <td class="muted">{{ loop.index }}</td>
+          <td><strong>{{ l.leader_name }}</strong></td>
+          <td class="muted">{{ l.leader_uid or '—' }}</td>
+          <td><span class="badge badge-gold">{{ l.rank or '—' }}</span></td>
+          <td>{{ l.rally_type or '—' }}</td>
+          <td>{{ l.power or '—' }}</td>
+          <td class="muted">{{ l.notes or '—' }}</td>
+          <td class="muted">{{ l.created_at[:10] if l.created_at else '—' }}</td>
+          <td>
+            <form method="post" action="/rally-leaders/{{ l.id }}/delete" onsubmit="return confirm('Delete this leader?')">
+              <button type="submit" class="btn btn-danger btn-sm">✕</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="empty-state">
+  <div class="empty-icon">⭐</div>
+  <p>{{ 'No rally leaders added yet.' if lang == 'en' else 'لا يوجد قادة تجمع بعد.' }}</p>
+</div>
+{% endif %}
+{% endblock %}

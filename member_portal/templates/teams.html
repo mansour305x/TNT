@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">
+    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 014-4h4a4 4 0 014 4v2"/><path d="M16 3.13a4 4 0 010 7.75M21 21v-2a4 4 0 00-3-3.87"/></svg>
+    {{ 'Teams' if lang == 'en' else 'الفرق' }}
+  </h1>
+  <span class="page-count">{{ teams | length }}</span>
+</div>
+
+<div class="card mb-4">
+  <div class="card-header">{{ 'Create Team' if lang == 'en' else 'إنشاء فريق' }}</div>
+  <div class="card-body">
+    <form method="post" action="/teams/add" class="grid-form">
+      <div class="form-group">
+        <label>{{ 'Team Name' if lang == 'en' else 'اسم الفريق' }} *</label>
+        <input type="text" name="team_name" required class="input-field" placeholder="Team name" />
+      </div>
+      <div class="form-group">
+        <label>{{ 'Type' if lang == 'en' else 'النوع' }}</label>
+        <select name="team_type" class="input-field">
+          <option value="general">General</option>
+          <option value="attack">Attack</option>
+          <option value="defense">Defense</option>
+          <option value="gathering">Gathering</option>
+          <option value="war">War</option>
+        </select>
+      </div>
+      <div class="form-group form-group-full">
+        <label>{{ 'Description' if lang == 'en' else 'الوصف' }}</label>
+        <input type="text" name="description" class="input-field" placeholder="Optional description" />
+      </div>
+      <div class="form-group form-group-full">
+        <button type="submit" class="btn btn-primary">+ {{ 'Create Team' if lang == 'en' else 'إنشاء' }}</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% if teams %}
+<div class="teams-grid">
+  {% for team in teams %}
+  <div class="card team-card">
+    <div class="team-card-header">
+      <div>
+        <div class="team-card-name">{{ team.team_name }}</div>
+        <div class="team-card-meta">
+          <span class="badge badge-outline">{{ team.team_type }}</span>
+          <span class="muted">{{ team.members | length }} {{ 'members' if lang == 'en' else 'عضو' }}</span>
+        </div>
+      </div>
+      <form method="post" action="/teams/{{ team.id }}/delete" onsubmit="return confirm('Delete team?')">
+        <button type="submit" class="btn btn-danger btn-sm">✕</button>
+      </form>
+    </div>
+    {% if team.description %}
+    <p class="team-description muted">{{ team.description }}</p>
+    {% endif %}
+
+    <!-- Add member -->
+    <form method="post" action="/teams/{{ team.id }}/members/add" class="team-add-member-form">
+      <input type="text" name="member_name" required class="input-field input-sm" placeholder="{{ 'Member name' if lang == 'en' else 'اسم العضو' }}" />
+      <input type="text" name="member_uid" class="input-field input-sm" placeholder="UID" />
+      <select name="role" class="input-field input-sm">
+        <option value="member">Member</option>
+        <option value="captain">Captain</option>
+        <option value="leader">Leader</option>
+      </select>
+      <button type="submit" class="btn btn-sm btn-secondary">+</button>
+    </form>
+
+    {% if team.members %}
+    <div class="table-scroll mt-2">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>{{ 'Name' if lang == 'en' else 'الاسم' }}</th>
+            <th>UID</th>
+            <th>{{ 'Role' if lang == 'en' else 'الدور' }}</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for m in team.members %}
+          <tr>
+            <td>{{ m.member_name }}</td>
+            <td class="muted">{{ m.member_uid or '—' }}</td>
+            <td><span class="badge badge-outline">{{ m.role }}</span></td>
+            <td>
+              <form method="post" action="/teams/members/{{ m.id }}/delete" onsubmit="return confirm('Remove member?')">
+                <button type="submit" class="btn btn-danger btn-sm">✕</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="muted mt-2" style="font-size:.85rem">{{ 'No members yet.' if lang == 'en' else 'لا أعضاء بعد.' }}</p>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="empty-state">
+  <div class="empty-icon">👥</div>
+  <p>{{ 'No teams created yet.' if lang == 'en' else 'لا توجد فرق بعد.' }}</p>
+</div>
+{% endif %}
+{% endblock %}
