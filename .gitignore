@@ -9,4 +9,7 @@ version
 backups
 captcha_images
 .vscode
-member_portal/portal.dbnohup.out
+member_portal/portal.db
+nohup.out
+*.db
+

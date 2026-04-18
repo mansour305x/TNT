@@ -3,6 +3,7 @@ import hmac
 import io
 import csv
 import json
+import logging
 import os
 import secrets
 import sqlite3
@@ -16,6 +17,12 @@ from urllib.parse import urlencode
 from aiohttp import ClientSession, web
 from dotenv import load_dotenv
 from jinja2 import Environment, FileSystemLoader, select_autoescape
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+)
+logger = logging.getLogger(__name__)
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -970,8 +977,6 @@ def send_smtp_message(subject: str, target_email: str, body: str) -> bool:
     smtp_from = cfg["from"] or smtp_user
 
     # Debug: Print configuration status
-    print(f"[SMTP DEBUG] host={bool(smtp_host)}, port={smtp_port}, user={bool(smtp_user)}, pass={bool(smtp_password)}, from={bool(smtp_from)}", flush=True)
-    print(f"[SMTP DEBUG] Full config: {repr(cfg)}", flush=True)
 
     if not smtp_host:
         print("[SMTP ERROR] Missing SMTP_HOST", flush=True)
@@ -993,7 +998,7 @@ def send_smtp_message(subject: str, target_email: str, body: str) -> bool:
     msg.set_content(body)
 
     try:
-        print(f"[SMTP] Attempting to send to {target_email} via {smtp_host}:{smtp_port}", flush=True)
+        import logging; logging.info(f"[SMTP] Attempting to send to {target_email} via {smtp_host}:{smtp_port}")
         # Port 465 typically requires implicit SSL, while 587 uses STARTTLS.
         if int(smtp_port) == 465:
             with smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=15) as smtp:
@@ -1004,10 +1009,10 @@ def send_smtp_message(subject: str, target_email: str, body: str) -> bool:
                 smtp.starttls()
                 smtp.login(smtp_user, smtp_password)
                 smtp.send_message(msg)
-        print(f"[SMTP] Message sent successfully to {target_email}", flush=True)
+        import logging; logging.info(f"[SMTP] Message sent to {target_email}")
         return True
     except Exception as exc:
-        print(f"[SMTP] send failed to {target_email}: {type(exc).__name__}: {exc}", flush=True)
+        import logging; logging.warning(f"[SMTP] send failed to {target_email}: {type(exc).__name__}: {exc}")
         return False
 
 
@@ -1047,7 +1052,6 @@ def get_smtp_config() -> dict[str, Any]:
     except ValueError:
         env_port = 587
 
-    print(f"[CONFIG] ENV variables - host={bool(env_host)}, user={bool(env_user)}, pass={bool(env_password)}", flush=True)
 
     with get_db() as conn:
         host = get_setting(conn, "smtp_host", env_host).strip()
@@ -1064,7 +1068,6 @@ def get_smtp_config() -> dict[str, Any]:
     if not sender:
         sender = user
 
-    print(f"[CONFIG] Final config - host={repr(host)}, port={port}, user={repr(user)}, from={repr(sender)}", flush=True)
 
     return {
         "host": host,
@@ -1110,10 +1113,8 @@ def get_setting(conn: sqlite3.Connection, key: str, default: str = "") -> str:
         (key,),
     ).fetchone()
     if not row:
-        print(f"[DB] Setting '{key}' not found, using default: {repr(default)}", flush=True)
         return default
     value = str(row["setting_value"])
-    print(f"[DB] Setting '{key}' loaded: {repr(value)}", flush=True)
     return value
 
 
@@ -1126,7 +1127,6 @@ def set_setting(conn: sqlite3.Connection, key: str, value: str) -> None:
         """,
         (key, value),
     )
-    print(f"[DB] Setting '{key}' saved: {repr(value)}", flush=True)
 
 
 def fetch_state_alliances(conn: sqlite3.Connection, state_number: str) -> list[dict[str, Any]]:
@@ -2940,10 +2940,23 @@ async def api_features(request: web.Request) -> web.Response:
     return web.json_response({"features": features})
 
 
+@web.middleware
+async def security_headers_middleware(request: web.Request, handler):
+    try:
+        response = await handler(request)
+    except web.HTTPException as ex:
+        response = ex
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("X-XSS-Protection", "1; mode=block")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    return response
+
+
 def build_app() -> web.Application:
     init_db()
 
-    app = web.Application()
+    app = web.Application(middlewares=[security_headers_middleware])
     app["jinja_env"] = Environment(
         loader=FileSystemLoader(TEMPLATES_DIR),
         autoescape=select_autoescape(["html", "xml"]),

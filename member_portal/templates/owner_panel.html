@@ -16,7 +16,7 @@
 
     <!-- Add Feature Form -->
     <details style="margin-bottom:1.5rem;">
-      <summary style="cursor:pointer;font-weight:700;color:var(--accent);">➕ Add New Feature</summary>
+      <summary style="cursor:pointer;font-weight:700;color:var(--ink-bright);">➕ Add New Feature</summary>
       <form method="post" action="/owner/features/add" class="stacked" style="max-width:600px;margin-top:1rem;">
         <div class="form-grid-2">
           <label><span>Feature Key *</span><input type="text" name="feature_key" placeholder="e.g. dark_mode" required /></label>
@@ -99,7 +99,7 @@
             <td>{{ sa.created_at[:10] }}</td>
             <td style="display:flex;gap:.5rem;flex-wrap:wrap;">
               <form method="post" action="/owner/state-accounts/{{ sa.id }}/reset-password">
-                <input type="text" name="new_password" placeholder="New password (≥6)" style="padding:.35rem .6rem;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text);font-size:.85rem;" required minlength="6" />
+                <input type="text" name="new_password" placeholder="New password (≥6)" style="padding:.35rem .6rem;border:1px solid var(--line2);border-radius:6px;background:var(--card);color:var(--ink);font-size:.85rem;" required minlength="6" />
                 <button type="submit" class="btn btn-sm">Reset PW</button>
               </form>
               <form method="post" action="/owner/state-accounts/{{ sa.id }}/delete" onsubmit="return confirm('Delete state account? This will NOT delete associated data.')">

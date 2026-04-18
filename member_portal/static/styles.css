@@ -32,6 +32,13 @@
   --shadow:      0 24px 64px rgba(0, 0, 0, 0.85);
   --shadow-sm:   0 8px 28px rgba(0, 0, 0, 0.70);
   --shadow-gold: 0 8px 32px rgba(212, 175, 55, 0.22);
+
+  /* ── Legacy aliases (backward compat) ────── */
+  --accent:  #D4AF37;
+  --border:  rgba(212, 175, 55, 0.30);
+  --text:    #D4AF37;
+  --bg-card: rgba(18, 15, 5, 0.90);
+  --bg-2:    #111111;
 }
 
 /* ── RESET ───────────────────────────────────── */
@@ -591,6 +598,35 @@ a:hover { color: #fff; }
   .reg-actions { justify-content: stretch; }
   .reg-submit { width: 100%; }
   .dash-header { flex-direction: column; }
+}
+
+/* ── BADGE OWNER ──────────────────────────────── */
+.badge-owner {
+  background: linear-gradient(120deg, #3A2800, #D4AF37);
+  color: #000 !important;
+  border: 1px solid rgba(212,175,55,0.6);
+}
+
+/* ── CODE ELEMENTS ────────────────────────────── */
+code {
+  background: rgba(212,175,55,0.08);
+  color: var(--ink-bright);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: .85em;
+  border: 1px solid var(--line);
+}
+
+/* ── DETAILS / SUMMARY ────────────────────────── */
+details > summary { list-style: none; }
+details > summary::-webkit-details-marker { display: none; }
+details[open] > summary { margin-bottom: .75rem; }
+
+/* ── PRINT ────────────────────────────────────── */
+@media print {
+  .topbar, .flash, .btn, form { display: none !important; }
+  body { background: #fff; color: #000; }
+  .data-table th, .data-table td { border-color: #ccc; color: #000; }
 }
 @media(max-width: 640px) { .form-grid-2 { grid-template-columns: 1fr; } }
 @media(max-width: 560px) {
