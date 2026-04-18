@@ -30,9 +30,26 @@ BASE_DIR = Path(__file__).resolve().parent
 def resolve_db_path() -> Path:
     explicit_path = os.getenv("PORTAL_DB_PATH", "").strip()
     if explicit_path:
-        return Path(explicit_path)
+        p = Path(explicit_path)
+        try:
+            p.parent.mkdir(parents=True, exist_ok=True)
+            return p
+        except OSError:
+            pass  # fall through to defaults
     if os.getenv("RENDER", "").lower() == "true":
-        return Path("/var/data/portal.db")
+        # Try the persistent disk path first, fallback to project dir
+        candidates = [
+            Path("/var/data/portal.db"),
+            BASE_DIR / "portal.db",
+            Path("/tmp/portal.db"),
+        ]
+        for candidate in candidates:
+            try:
+                candidate.parent.mkdir(parents=True, exist_ok=True)
+                return candidate
+            except OSError:
+                continue
+
     return BASE_DIR / "portal.db"
 
 
