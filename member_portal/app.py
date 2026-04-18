@@ -2,6 +2,7 @@ import hashlib
 import hmac
 import io
 import csv
+import json
 import os
 import secrets
 import sqlite3
@@ -1310,6 +1311,7 @@ async def members_page(request: web.Request) -> web.Response:
             SELECT r.id, r.member_name, r.member_uid, r.alliance, r.rank, r.notes, r.created_at, u.username
             FROM member_records r
             LEFT JOIN users u ON u.id = r.created_by
+            WHERE r.state_account_id IS NULL
             ORDER BY r.id DESC
             LIMIT 100
             """
@@ -1319,6 +1321,9 @@ async def members_page(request: web.Request) -> web.Response:
             SELECT v.record_id, f.label, v.option_value
             FROM member_record_values v
             JOIN dropdown_fields f ON f.id = v.field_id
+            WHERE v.record_id IN (
+                SELECT id FROM member_records WHERE state_account_id IS NULL
+            )
             ORDER BY v.id ASC
             """
         ).fetchall()
@@ -1362,6 +1367,7 @@ async def transfers_page(request: web.Request) -> web.Response:
             SELECT t.id, t.member_name, t.member_uid, t.power, t.furnace, t.current_state, t.invite_type, t.future_alliance, t.created_at, u.username
             FROM transfer_records t
             LEFT JOIN users u ON u.id = t.created_by
+            WHERE t.state_account_id IS NULL
             ORDER BY t.id DESC
             LIMIT 100
             """
@@ -2069,11 +2075,11 @@ async def delete_record(request: web.Request) -> web.StreamResponse:
     record_id = int(request.match_info["record_id"])
 
     with get_db() as conn:
-        exists = conn.execute("SELECT id FROM member_records WHERE id = ? LIMIT 1", (record_id,)).fetchone()
+        exists = conn.execute("SELECT id FROM member_records WHERE id = ? AND state_account_id IS NULL LIMIT 1", (record_id,)).fetchone()
         if not exists:
             return flash_response("/members", translate_request(request, "member_not_found"), "error")
 
-        conn.execute("DELETE FROM member_records WHERE id = ?", (record_id,))
+        conn.execute("DELETE FROM member_records WHERE id = ? AND state_account_id IS NULL", (record_id,))
 
     return flash_response("/members", translate_request(request, "member_deleted"), "info")
 
@@ -2084,7 +2090,7 @@ async def delete_all_records(request: web.Request) -> web.StreamResponse:
         return flash_response("/portal", translate_request(request, "admin_required"), "error")
 
     with get_db() as conn:
-        conn.execute("DELETE FROM member_records")
+        conn.execute("DELETE FROM member_records WHERE state_account_id IS NULL")
 
     return flash_response("/members", translate_request(request, "all_members_deleted"), "info")
 
@@ -2095,7 +2101,7 @@ async def delete_all_transfers(request: web.Request) -> web.StreamResponse:
         return flash_response("/portal", translate_request(request, "admin_required"), "error")
 
     with get_db() as conn:
-        conn.execute("DELETE FROM transfer_records")
+        conn.execute("DELETE FROM transfer_records WHERE state_account_id IS NULL")
 
     return flash_response("/transfers", translate_request(request, "all_transfers_deleted"), "info")
 
@@ -2497,6 +2503,7 @@ async def export_members_csv(request: web.Request) -> web.Response:
             SELECT r.id, r.member_name, r.member_uid, r.alliance, r.rank, r.notes, r.created_at, u.username
             FROM member_records r
             LEFT JOIN users u ON u.id = r.created_by
+            WHERE r.state_account_id IS NULL
             ORDER BY r.id ASC
             """
         ).fetchall()
@@ -2505,6 +2512,9 @@ async def export_members_csv(request: web.Request) -> web.Response:
             SELECT v.record_id, f.field_key, v.option_value
             FROM member_record_values v
             JOIN dropdown_fields f ON f.id = v.field_id
+            WHERE v.record_id IN (
+                SELECT id FROM member_records WHERE state_account_id IS NULL
+            )
             """
         ).fetchall()
 
@@ -2545,6 +2555,7 @@ async def export_transfers_csv(request: web.Request) -> web.Response:
                    t.invite_type, t.future_alliance, t.created_at, u.username
             FROM transfer_records t
             LEFT JOIN users u ON u.id = t.created_by
+            WHERE t.state_account_id IS NULL
             ORDER BY t.id ASC
             """
         ).fetchall()
@@ -2913,7 +2924,6 @@ async def api_features(request: web.Request) -> web.Response:
         rows = conn.execute(
             "SELECT feature_key, label, description, feature_type, config_json FROM features WHERE is_enabled = 1"
         ).fetchall()
-    import json
     features = []
     for r in rows:
         try:
