@@ -1,30 +1,44 @@
 {% extends "base.html" %}
 {% block content %}
 
-<div class="portal-header">
-  <div>
-    <h1 class="portal-title">{{ 'Verify Email' if lang == 'en' else 'توثيق البريد الإلكتروني' }}</h1>
-    <p class="portal-sub">
-      {{ 'Enter the 6-digit code sent to:' if lang == 'en' else 'أدخل رمز التحقق المرسل إلى:' }}
-      <strong>{{ pending_email }}</strong>
-    </p>
-  </div>
-  <a class="btn btn-ghost" href="/profile">{{ 'Back to Profile' if lang == 'en' else 'العودة للملف الشخصي' }}</a>
-</div>
+<div class="auth-center-wrap">
+  <div class="auth-panel-single panel">
+    <div style="text-align:center;margin-bottom:1.2rem;">
+      <div style="font-size:2.4rem;margin-bottom:.4rem;">📬</div>
+      <h2 class="auth-panel-title">{{ 'Verify Email' if lang == 'en' else 'توثيق البريد الإلكتروني' }}</h2>
+      <p class="portal-sub" style="margin-top:.3rem;">
+        {{ 'A 6-digit code was sent to:' if lang == 'en' else 'تم إرسال رمز مؤلف من 6 أرقام إلى:' }}
+        <strong style="color:var(--ink-bright);">{{ pending_email }}</strong>
+      </p>
+    </div>
 
-<section class="panel" style="max-width:520px;margin:0 auto;">
-  <form method="post" action="/profile/verify-email" class="stacked">
-    <label>
-      <span>{{ 'Verification Code' if lang == 'en' else 'رمز التحقق' }}</span>
-      <input type="text" name="verify_code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autofocus required />
-    </label>
-    <button class="btn btn-primary" type="submit">{{ 'Verify' if lang == 'en' else 'تحقق' }}</button>
-  </form>
-  <div style="margin-top:1rem;text-align:center;">
-    <form method="post" action="/profile/resend-verify-email">
-      <button class="btn btn-ghost" type="submit">{{ 'Resend Code' if lang == 'en' else 'إعادة إرسال الرمز' }}</button>
+    {% if flash %}
+    <div class="flash flash-{{ flash.level }}" style="margin-bottom:1rem;">{{ flash.text }}</div>
+    {% endif %}
+
+    <form method="post" action="/profile/verify-email" class="stacked">
+      <label>
+        <span>{{ 'Verification Code' if lang == 'en' else 'رمز التحقق' }}</span>
+        <input class="otp-input" type="text" name="verify_code"
+               inputmode="numeric" pattern="[0-9]{6}" maxlength="6"
+               autofocus required autocomplete="one-time-code"
+               placeholder="000000" />
+      </label>
+      <button class="btn btn-primary full-btn" type="submit">
+        {{ 'Verify Email' if lang == 'en' else 'توثيق البريد' }}
+      </button>
     </form>
-  </div>
-</section>
 
+    <div style="margin-top:1.2rem;text-align:center;">
+      <form method="post" action="/profile/resend-verify-email" style="display:inline;">
+        <button class="btn btn-ghost" type="submit" style="font-size:.85rem;">
+          🔄 {{ 'Resend Code' if lang == 'en' else 'إعادة إرسال الرمز' }}
+        </button>
+      </form>
+      <div style="margin-top:.7rem;">
+        <a class="text-link" href="/profile">← {{ 'Back to Profile' if lang == 'en' else 'العودة للملف الشخصي' }}</a>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}

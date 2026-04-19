@@ -118,6 +118,16 @@ class TNTPortalApp:
         self.app.router.add_get("/discord-settings", self.discord_settings_page)
         self.app.router.add_get("/rally-leaders", self.rally_leaders_page)
         self.app.router.add_get("/forgot-password", self.forgot_password_page)
+        self.app.router.add_post("/forgot-password/request", self.form_forgot_password)
+        self.app.router.add_get("/reset-password", self.reset_password_page)
+        self.app.router.add_post("/reset-password", self.form_reset_password)
+
+        # Profile form routes
+        self.app.router.add_post("/profile", self.form_update_profile)
+        self.app.router.add_post("/profile/password", self.form_change_password)
+        self.app.router.add_get("/profile/verify-email", self.verify_email_page)
+        self.app.router.add_post("/profile/verify-email", self.form_verify_email)
+        self.app.router.add_post("/profile/resend-verify-email", self.form_resend_verify_email)
 
         if STATIC_DIR.exists():
             self.app.router.add_static("/static", path=STATIC_DIR)
@@ -1044,8 +1054,18 @@ class TNTPortalApp:
         redir = await self._require_auth_page(request)
         if redir:
             return redir
+        smtp_ok = bool(Config.SMTP_USERNAME and Config.SMTP_PASSWORD)
+        cu = request.get("current_user")
+        has_pending = False
+        if cu and cu.email and smtp_ok:
+            row = db.fetchone(
+                "SELECT id FROM email_verification_codes WHERE user_id = ? AND is_used = 0 ORDER BY id DESC LIMIT 1",
+                (cu.id,)
+            )
+            has_pending = row is not None
         ctx = self._base_ctx(request)
-        ctx.update({"title": "Profile"})
+        ctx.update({"title": "Profile", "smtp_configured": smtp_ok,
+                    "has_pending_email_verification": has_pending})
         return await self._render_template("profile.html", ctx)
 
     async def owner_page(self, request: web.Request) -> web.StreamResponse:
@@ -1128,6 +1148,139 @@ class TNTPortalApp:
         lang = self._lang(request)
         return await self._render_template("forgot_password.html", {"lang": lang, "title": "Forgot Password"})
 
+    async def reset_password_page(self, request: web.Request) -> web.StreamResponse:
+        token = request.rel_url.query.get("token", "")
+        lang = self._lang(request)
+        return await self._render_template("reset_password.html", {"lang": lang, "title": "Reset Password", "token": token})
+
+    async def form_forgot_password(self, request: web.Request) -> web.StreamResponse:
+        from services.auth_service import AuthService
+
+        data = await request.post()
+        lang = self._lang(request)
+        email = data.get("email", "").strip()
+        ok, msg = AuthService.request_password_reset(email)
+        level = "success" if ok else "error"
+        return await self._render_template("forgot_password.html", {
+            "lang": lang, "title": "Forgot Password",
+            "flash": {"level": level, "text": msg},
+        })
+
+    async def form_reset_password(self, request: web.Request) -> web.StreamResponse:
+        from services.auth_service import AuthService
+
+        data = await request.post()
+        lang = self._lang(request)
+        token = data.get("token", "").strip()
+        new_password = data.get("new_password", "")
+        ok, msg = AuthService.reset_password(token, new_password)
+        if ok:
+            return await self._render_template("auth.html", {
+                "lang": lang, "title": "Sign In",
+                "flash": {"level": "success", "text": "تم تغيير كلمة المرور. يمكنك تسجيل الدخول الآن." if lang == "ar" else "Password changed. You can sign in now."},
+            })
+        return await self._render_template("reset_password.html", {
+            "lang": lang, "title": "Reset Password", "token": token,
+            "flash": {"level": "error", "text": msg},
+        })
+
+    async def form_update_profile(self, request: web.Request) -> web.StreamResponse:
+        redir = await self._require_auth_page(request)
+        if redir:
+            return redir
+        from services.auth_service import AuthService
+
+        data = await request.post()
+        lang = self._lang(request)
+        user_id = request["user_id"]
+        email = data.get("email", "").strip()
+        state = data.get("state", "").strip()
+
+        cu = request.get("current_user")
+        # Update profile
+        from core.database import db as _db
+        _db.update("users", {"email": email or None, "state": state or None}, {"id": user_id})
+        # If email changed and SMTP configured, send verification
+        smtp_ok = bool(Config.SMTP_USERNAME and Config.SMTP_PASSWORD)
+        flash_text = "تم حفظ البيانات." if lang == "ar" else "Profile saved."
+        if email and smtp_ok and cu and cu.email != email:
+            ok, msg = AuthService.request_email_verification(user_id, email)
+            if ok:
+                flash_text = ("تم حفظ البيانات وإرسال رمز التحقق." if lang == "ar"
+                              else "Profile saved. A verification code was sent.")
+        ctx = self._base_ctx(request)
+        ctx.update({"title": "Profile", "smtp_configured": smtp_ok,
+                    "has_pending_email_verification": False,
+                    "flash": {"level": "success", "text": flash_text}})
+        return await self._render_template("profile.html", ctx)
+
+    async def form_change_password(self, request: web.Request) -> web.StreamResponse:
+        redir = await self._require_auth_page(request)
+        if redir:
+            return redir
+        from services.auth_service import AuthService
+
+        data = await request.post()
+        lang = self._lang(request)
+        user_id = request["user_id"]
+        current_pw = data.get("current_password", "")
+        new_pw = data.get("new_password", "")
+        ok, msg = AuthService.change_password(user_id, current_pw, new_pw)
+        smtp_ok = bool(Config.SMTP_USERNAME and Config.SMTP_PASSWORD)
+        ctx = self._base_ctx(request)
+        ctx.update({"title": "Profile", "smtp_configured": smtp_ok,
+                    "has_pending_email_verification": False,
+                    "flash": {"level": "success" if ok else "error", "text": msg}})
+        return await self._render_template("profile.html", ctx)
+
+    async def verify_email_page(self, request: web.Request) -> web.StreamResponse:
+        redir = await self._require_auth_page(request)
+        if redir:
+            return redir
+        lang = self._lang(request)
+        cu = request.get("current_user")
+        pending_email = cu.email if cu else ""
+        return await self._render_template("verify_email_code.html", {
+            "lang": lang, "title": "Verify Email", "pending_email": pending_email,
+            "current_user": cu, "request_path": request.path,
+        })
+
+    async def form_verify_email(self, request: web.Request) -> web.StreamResponse:
+        redir = await self._require_auth_page(request)
+        if redir:
+            return redir
+        from services.auth_service import AuthService
+
+        data = await request.post()
+        lang = self._lang(request)
+        user_id = request["user_id"]
+        code = data.get("verify_code", "").strip()
+        ok, msg = AuthService.verify_email(user_id, code)
+        smtp_ok = bool(Config.SMTP_USERNAME and Config.SMTP_PASSWORD)
+        ctx = self._base_ctx(request)
+        ctx.update({"title": "Profile", "smtp_configured": smtp_ok,
+                    "has_pending_email_verification": not ok,
+                    "flash": {"level": "success" if ok else "error", "text": msg}})
+        return await self._render_template("profile.html", ctx)
+
+    async def form_resend_verify_email(self, request: web.Request) -> web.StreamResponse:
+        redir = await self._require_auth_page(request)
+        if redir:
+            return redir
+        from services.auth_service import AuthService
+
+        lang = self._lang(request)
+        user_id = request["user_id"]
+        cu = request.get("current_user")
+        email = cu.email if cu else ""
+        ok, msg = AuthService.request_email_verification(user_id, email)
+        return await self._render_template("verify_email_code.html", {
+            "lang": lang, "title": "Verify Email",
+            "pending_email": email,
+            "current_user": cu, "request_path": request.path,
+            "flash": {"level": "success" if ok else "error", "text": msg},
+        })
+
     def _create_user_session(self, user_id: int, request: web.Request) -> str | None:
         from utils.security import SecurityManager
 
@@ -1186,4 +1339,5 @@ async def init_app() -> web.Application:
 
 
 if __name__ == "__main__":
-    web.run_app(asyncio.run(init_app()), host="0.0.0.0", port=8080)
+    port = int(os.getenv("PORT", 8080))
+    web.run_app(asyncio.run(init_app()), host="0.0.0.0", port=port)

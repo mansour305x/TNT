@@ -868,3 +868,183 @@ details[open] > summary { margin-bottom: .75rem; }
 }
 .empty-icon { font-size: 2.5rem; margin-bottom: .6rem; }
 
+/* ═══════════════════════════════════════════════════════════
+   RESPONSIVE — MOBILE FIRST ENHANCEMENTS
+═══════════════════════════════════════════════════════════ */
+
+/* ── Auth pages ── */
+@media(max-width: 480px) {
+  .auth-center-wrap { padding: 1rem .5rem; }
+  .auth-panel-single { padding: 1.4rem 1rem; border-radius: 14px; }
+  .tnt-logo-badge-xl { width: 68px; height: 68px; font-size: 1.3rem; }
+  .tnt-logo-title { font-size: 1.5rem; }
+  .social-auth-actions { flex-direction: column; gap: .5rem; }
+  .btn.btn-social { width: 100%; justify-content: center; text-align: center; }
+}
+
+/* ── Topbar ── */
+@media(max-width: 480px) {
+  .topbar { gap: 8px; padding: 0 3vw; height: 56px; }
+  .brand-text { display: none; }
+  .nav-links { gap: 2px; }
+  .nav-link { padding: 5px 8px; font-size: .78rem; }
+  .lang-form select { font-size: .78rem; padding: 3px 4px; }
+}
+
+/* ── Container & Layout ── */
+@media(max-width: 600px) {
+  .container { width: 100%; padding: 0 1rem; margin: 16px auto 40px; }
+  .layout { grid-template-columns: 1fr; gap: 1rem; }
+  .panel { padding: 1rem; border-radius: 12px; }
+  .portal-header { flex-direction: column; align-items: flex-start; gap: .6rem; }
+  .portal-header > div:last-child { flex-wrap: wrap; }
+}
+
+/* ── Tables: horizontal scroll on mobile ── */
+@media(max-width: 700px) {
+  .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .data-table th, .data-table td { font-size: .78rem; padding: .4rem .5rem; white-space: nowrap; }
+}
+@media(max-width: 480px) {
+  .data-table th, .data-table td { font-size: .72rem; padding: .35rem .4rem; }
+}
+
+/* ── Form grids ── */
+@media(max-width: 560px) {
+  .form-grid-2, .form-grid { grid-template-columns: 1fr !important; gap: .7rem; }
+  .stacked label { gap: .3rem; }
+  .stacked input, .stacked select, .stacked textarea { font-size: .9rem; padding: .55rem .75rem; }
+  .btn { font-size: .85rem; padding: .5rem 1rem; }
+  .full-btn { padding: .65rem 1rem; }
+}
+
+/* ── Profile settings grid ── */
+@media(max-width: 640px) {
+  .settings-grid { grid-template-columns: 1fr; }
+  .setting-row { flex-direction: column; align-items: flex-start; gap: 2px; }
+}
+
+/* ── Profile dropdown ── */
+@media(max-width: 480px) {
+  .profile-dropdown { width: calc(100vw - 2rem); right: -2rem; }
+}
+
+/* ── Sidebar on tiny screens ── */
+@media(max-width: 400px) {
+  .sidebar { width: min(100vw, 260px); }
+}
+
+/* ── Flash messages ── */
+@media(max-width: 600px) {
+  .flash { font-size: .85rem; padding: .6rem 1rem; margin: .4rem .5rem; border-radius: 8px; }
+}
+
+/* ── Owner / Dashboard sections ── */
+@media(max-width: 640px) {
+  .dash-header { flex-direction: column; align-items: flex-start; gap: .6rem; }
+  .dashboard-wrap, .stats-grid { gap: 1rem; }
+  .stat-card { padding: 1rem; }
+  .stat-value { font-size: 1.8rem; }
+}
+
+/* ── State portal ── */
+@media(max-width: 600px) {
+  .state-summary-card { flex-direction: column; gap: .6rem; padding: 1rem; }
+  .hero-card { padding: 1.2rem 1rem; border-radius: 12px; }
+  .hero-card h1 { font-size: 1.3rem; }
+}
+
+/* ── Export grid ── */
+@media(max-width: 480px) {
+  .export-grid { grid-template-columns: 1fr 1fr; gap: .7rem; }
+  .export-card { padding: 1.2rem .7rem; }
+}
+@media(max-width: 360px) {
+  .export-grid { grid-template-columns: 1fr; }
+}
+
+/* ── Rally leaders / Teams responsive ── */
+@media(max-width: 640px) {
+  .rally-grid, .teams-grid { grid-template-columns: 1fr; }
+}
+
+/* ── Global touch targets ── */
+@media(hover: none) {
+  .btn, button, a.btn, .sidebar-link, .nav-link {
+    min-height: 42px;
+    display: inline-flex;
+    align-items: center;
+  }
+}
+
+/* ── Print: hide interactive ── */
+@media print {
+  .sidebar, .sidebar-toggle, .sidebar-overlay,
+  .topbar, .flash, .btn, form { display: none !important; }
+  .container.sidebar-layout { margin-left: 0 !important; }
+  body { background: white; color: black; }
+  .panel, .card { border: 1px solid #ccc; box-shadow: none; }
+}
+
+/* ── Accessibility: focus ring ── */
+*:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ── Scrollbar styling (non-mobile) ── */
+@media(hover: hover) {
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg2); }
+  ::-webkit-scrollbar-thumb { background: var(--muted); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--ink-soft); }
+}
+
+/* ── Password strength indicator ── */
+.pw-strength-bar {
+  height: 4px; border-radius: 4px; margin-top: 4px;
+  background: var(--line2); overflow: hidden;
+}
+.pw-strength-fill {
+  height: 100%; border-radius: 4px;
+  transition: width .3s, background .3s;
+}
+.pw-strength-fill.weak   { width: 25%; background: #ff6b6b; }
+.pw-strength-fill.fair   { width: 50%; background: #ffc107; }
+.pw-strength-fill.good   { width: 75%; background: #90e0a0; }
+.pw-strength-fill.strong { width: 100%; background: #34d399; }
+
+/* ── Toast / inline message ── */
+.msg-inline {
+  font-size: .83rem; padding: .35rem .7rem; border-radius: 7px; margin-top: .35rem;
+  display: none;
+}
+.msg-inline.show { display: block; }
+.msg-inline.success { background: rgba(52,211,153,.12); color: #34d399; border: 1px solid rgba(52,211,153,.25); }
+.msg-inline.error   { background: rgba(255,107,107,.10); color: #ff6b6b; border: 1px solid rgba(255,107,107,.22); }
+.msg-inline.info    { background: rgba(201,168,76,.09); color: var(--ink); border: 1px solid var(--line2); }
+
+/* ── Skeleton loader ── */
+.skeleton {
+  background: linear-gradient(90deg, var(--bg2) 25%, var(--bg3) 50%, var(--bg2) 75%);
+  background-size: 200% 100%;
+  animation: skel-shimmer 1.4s infinite;
+  border-radius: 6px;
+}
+@keyframes skel-shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+
+/* ── Verification code input ── */
+.otp-input {
+  letter-spacing: .35em; font-size: 1.5rem; font-weight: 700;
+  text-align: center; font-family: "Cairo", monospace;
+  width: 100%; max-width: 240px; margin: 0 auto; display: block;
+}
+
+/* ── Owner panel misc ── */
+@media(max-width: 600px) {
+  .owner-actions { flex-direction: column; }
+  .owner-actions .btn { width: 100%; }
+}
+
+

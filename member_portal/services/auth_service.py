@@ -356,3 +356,28 @@ class AuthService:
         except Exception as e:
             logger.error(f"Error sending verification email: {e}")
             return False, "حدث خطأ أثناء إرسال البريد"
+
+    @staticmethod
+    def request_email_verification(user_id: int, email: str) -> Tuple[bool, str]:
+        """alias لـ send_verification_email بنفس التوقيع المستخدم في handlers"""
+        return AuthService.send_verification_email(user_id, email)
+
+    @staticmethod
+    def change_password(user_id: int, current_password: str, new_password: str) -> Tuple[bool, str]:
+        """تغيير كلمة مرور المستخدم بعد التحقق من الحالية"""
+        try:
+            user = db.fetchone("SELECT password_hash FROM users WHERE id = ?", (user_id,))
+            if not user:
+                return False, "المستخدم غير موجود"
+            if not SecurityManager.verify_password(current_password, user["password_hash"]):
+                return False, "كلمة المرور الحالية غير صحيحة"
+            is_valid, msg = PasswordValidator.validate(new_password)
+            if not is_valid:
+                return False, msg
+            new_hash = SecurityManager.hash_password(new_password)
+            db.update("users", {"password_hash": new_hash}, {"id": user_id})
+            logger.info(f"Password changed for user {user_id}")
+            return True, "تم تغيير كلمة المرور بنجاح"
+        except Exception as e:
+            logger.error(f"Error changing password: {e}")
+            return False, "حدث خطأ أثناء تغيير كلمة المرور"

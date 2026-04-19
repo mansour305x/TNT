@@ -3,26 +3,63 @@ services:
     name: tnt-portal
     runtime: python
     plan: free
-    buildCommand: pip install -r requirements-web.txt
-    startCommand: python member_portal/app.py
-    healthCheckPath: /healthz
+    rootDir: member_portal
+    buildCommand: pip install -r requirements-new.txt
+    startCommand: python app_new.py
+    healthCheckPath: /health
     autoDeploy: true
     envVars:
-      - key: PORTAL_DB_PATH
-        value: /var/data/portal.db
+      # ── Application ──────────────────────────────────────
+      - key: ENVIRONMENT
+        value: production
       - key: PORTAL_SECRET_KEY
         generateValue: true
-      - key: PORTAL_ADMIN_PASSWORD
-        value: admin123
-      - key: PORTAL_FULL_ADMIN_USERNAME
-        value: mn9@hotmail.com
-      - key: PORTAL_FULL_ADMIN_PASSWORD
-        value: DANGER
+      - key: PORT
+        value: "10000"
+
+      # ── Database (persistent disk) ───────────────────────
+      - key: PORTAL_DB_PATH
+        value: /var/data/portal.db
+
+      # ── Owner account (seeded on first run) ──────────────
       - key: OWNER_USERNAME
-        value: danger
+        value: DANGER
       - key: OWNER_PASSWORD
-        value: Aa123456
+        value: Aa@123456
+
+      # ── Google OAuth2 ─────────────────────────────────────
+      # Set these in the Render dashboard manually:
+      - key: GOOGLE_CLIENT_ID
+        value: ""
+      - key: GOOGLE_CLIENT_SECRET
+        value: ""
+      - key: GOOGLE_REDIRECT_URI
+        value: https://tnt-portal.onrender.com/oauth/google/callback
+
+      # ── Discord OAuth2 ────────────────────────────────────
+      - key: DISCORD_CLIENT_ID
+        value: ""
+      - key: DISCORD_CLIENT_SECRET
+        value: ""
+      - key: DISCORD_REDIRECT_URI
+        value: https://tnt-portal.onrender.com/oauth/discord/callback
+
+      # ── SMTP / Email ──────────────────────────────────────
+      - key: SMTP_SERVER
+        value: smtp.gmail.com
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USERNAME
+        value: ""
+      - key: SMTP_PASSWORD
+        value: ""
+      - key: FROM_EMAIL
+        value: ""
+      - key: FROM_NAME
+        value: "TNT Alliance"
+
     disk:
       name: tnt-data
       mountPath: /var/data
       sizeGB: 1
+
