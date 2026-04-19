@@ -1,3 +1,22 @@
+"""Compatibility entrypoint that delegates to the TNT-2 portal app."""
+
+from __future__ import annotations
+
+import asyncio
+import os
+
+from aiohttp import web
+
+from app_new import init_app
+
+
+async def build_app() -> web.Application:
+    return await init_app()
+
+
+if __name__ == "__main__":
+    port = int(os.getenv("PORT", 8080))
+    web.run_app(asyncio.run(build_app()), host="0.0.0.0", port=port)
 import hashlib
 import hmac
 import io
