@@ -12,4 +12,5 @@ captcha_images
 member_portal/portal.db
 nohup.out
 *.db
+member_portal/.env
 
