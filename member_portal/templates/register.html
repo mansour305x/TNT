@@ -14,34 +14,46 @@
   </div>
 
   <div class="auth-panel-single panel">
-    <h2 class="auth-panel-title">{{ 'Create Account' if lang == 'en' else 'إنشاء حساب' }}</h2>
+    <h2 class="auth-panel-title">{{ 'Register New Member' if lang == 'en' else 'تسجيل عضو جديد' }}</h2>
     <form method="post" action="/register" class="stacked">
+      <label>
+        <span>{{ 'Player Name' if lang == 'en' else 'اسم اللاعب داخل اللعبة' }}</span>
+        <input type="text" name="game_name" required />
+      </label>
       <label>
         <span>{{ 'Email' if lang == 'en' else 'البريد الإلكتروني' }}</span>
         <input type="email" name="email" autocomplete="email" required />
       </label>
       <label>
-        <span>{{ 'Username' if lang == 'en' else 'اسم المستخدم' }}</span>
-        <input type="text" name="username" autocomplete="username" required />
+        <span>{{ 'Country / State' if lang == 'en' else 'الدولة / الولاية' }}</span>
+        <input type="text" name="state" required />
+      </label>
+      <label>
+        <span>{{ 'Player Power' if lang == 'en' else 'قوة اللاعب' }}</span>
+        <input type="number" name="player_power" min="0" step="1" required />
+      </label>
+      <label>
+        <span>{{ 'Specialization (optional)' if lang == 'en' else 'نوع التخصص (اختياري)' }}</span>
+        <input type="text" name="specialization" placeholder="Infantry / Lancer / Marksman" />
+      </label>
+      <label>
+        <span>{{ 'Discord Link (optional)' if lang == 'en' else 'ربط حسابه في Discord (اختياري)' }}</span>
+        <input type="text" name="discord_id" placeholder="discord username or id" />
       </label>
       <label>
         <span>{{ 'Password' if lang == 'en' else 'كلمة المرور' }}</span>
         <input type="password" name="password" autocomplete="new-password" required />
       </label>
-      <label>
-        <span>{{ 'State / Province' if lang == 'en' else 'الولاية / المنطقة' }}</span>
-        <input type="text" name="state" />
-      </label>
       <button class="btn btn-primary full-btn" type="submit">
-        {{ 'Create Account with Email' if lang == 'en' else 'إنشاء حساب عبر الإيميل' }}
+        {{ 'Register Member' if lang == 'en' else 'تسجيل العضو' }}
       </button>
     </form>
 
     <div class="social-auth">
-      <div class="social-auth-label">{{ 'Or register with' if lang == 'en' else 'أو التسجيل عبر' }}</div>
+      <div class="social-auth-label">{{ 'Or register with' if lang == 'en' else 'أو التسجيل بواسطة' }}</div>
       <div class="social-auth-actions">
-        <a class="btn btn-social" href="/oauth/google/start">Google</a>
-        <a class="btn btn-social" href="/oauth/discord/start">Discord</a>
+        <a class="btn btn-social" href="/oauth/google/start">{{ 'Login with Google' if lang == 'en' else 'تسجيل الدخول بواسطة Google' }}</a>
+        <a class="btn btn-social" href="/oauth/discord/start">{{ 'Login with Discord' if lang == 'en' else 'تسجيل الدخول بواسطة Discord' }}</a>
       </div>
     </div>
 

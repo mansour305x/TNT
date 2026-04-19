@@ -1,41 +1,205 @@
 {% extends "base.html" %}
 {% block content %}
-
-<section class="hero-card hero-royal">
-  <h1>{{ 'Operations Lists' if lang == 'en' else 'قوائم العمليات' }}</h1>
-  <p>
-    {{ 'Choose an enabled list below. The current state and alliance registry are controlled from the dashboard.' if lang == 'en' else 'اختر إحدى القوائم المفعلة بالأسفل. يتم التحكم في الولاية الحالية وسجل تحالفاتها من لوحة التحكم.' }}
-  </p>
+<section class="hero-card hero-royal portal-hero">
+  <div>
+    <h1>{{ 'TNT Member Portal' if lang == 'en' else 'بوابة أعضاء TNT' }}</h1>
+    <p>{{ 'Calculators, bear coordination, and a game assistant in one place.' if lang == 'en' else 'الحاسبات، تنسيق الدب، والمساعد الخبير في واجهة واحدة.' }}</p>
+  </div>
+  <div class="hero-stats-grid">
+    <div class="hero-stat-box">
+      <span>{{ 'Power' if lang == 'en' else 'القوة' }}</span>
+      <strong>{{ '{:,}'.format(profile.player_power or 0) }}</strong>
+    </div>
+    <div class="hero-stat-box">
+      <span>{{ 'Specialization' if lang == 'en' else 'التخصص' }}</span>
+      <strong>{{ profile.specialization or ('Not set' if lang == 'en' else 'غير محدد') }}</strong>
+    </div>
+    <div class="hero-stat-box">
+      <span>{{ 'State' if lang == 'en' else 'الولاية' }}</span>
+      <strong>{{ profile.state or ('Not set' if lang == 'en' else 'غير محددة') }}</strong>
+    </div>
+  </div>
 </section>
 
-<div class="state-summary-card">
-  <div>
-    <div class="summary-label">{{ 'Current State' if lang == 'en' else 'الولاية الحالية' }}</div>
-    <div class="summary-value">{{ state_number or ('Not configured' if lang == 'en' else 'غير مضبوطة') }}</div>
-  </div>
-  <div>
-    <div class="summary-label">{{ 'Registered Alliances' if lang == 'en' else 'تحالفات الولاية المسجلة' }}</div>
-    <div class="summary-value">{{ alliances|length }}</div>
-  </div>
-  {% if current_user and current_user.is_admin %}
-  <a class="btn btn-ghost" href="/dashboard">{{ 'Open Dashboard' if lang == 'en' else 'فتح لوحة التحكم' }}</a>
-  {% endif %}
-</div>
+<section class="portal-grid-two">
+  <article class="panel portal-card">
+    <h2>{{ 'Account Data' if lang == 'en' else 'بيانات الحساب' }}</h2>
+    <div class="info-grid">
+      <div><span>{{ 'Player Name' if lang == 'en' else 'اسم اللاعب' }}</span><strong>{{ profile.game_name or current_user.username }}</strong></div>
+      <div><span>{{ 'Email' if lang == 'en' else 'البريد الإلكتروني' }}</span><strong>{{ profile.email or '-' }}</strong></div>
+      <div><span>{{ 'Discord' if lang == 'en' else 'Discord' }}</span><strong>{{ profile.discord_id or ('Not linked' if lang == 'en' else 'غير مربوط') }}</strong></div>
+      <div><span>{{ 'Alliance Role' if lang == 'en' else 'الدور داخل التحالف' }}</span><strong>{{ profile.alliance_role or ('Member' if lang == 'en' else 'عضو') }}</strong></div>
+      <div><span>{{ 'Academy Level' if lang == 'en' else 'مستوى الأكاديمية' }}</span><strong>{{ profile.academy_level or 0 }}</strong></div>
+    </div>
+  </article>
 
-<section class="lists-grid">
-  {% for card in cards %}
-  <a class="list-card" href="{{ card.href }}">
-    <div class="list-card-key">{{ loop.index }}</div>
-    <h2>{{ card.title }}</h2>
-    <p>{{ card.description }}</p>
-    <span class="list-card-cta">{{ 'Open List' if lang == 'en' else 'فتح القائمة' }}</span>
-  </a>
-  {% else %}
-  <div class="panel">
-    <h2>{{ 'No active lists' if lang == 'en' else 'لا توجد قوائم مفعلة' }}</h2>
-    <p>{{ 'Enable one or more lists from the dashboard first.' if lang == 'en' else 'قم بتفعيل قائمة أو أكثر من لوحة التحكم أولاً.' }}</p>
-  </div>
-  {% endfor %}
+  <article class="panel portal-card">
+    <h2>{{ 'Knowledge Highlights' if lang == 'en' else 'أبرز معرفة اللعبة' }}</h2>
+    <div class="knowledge-list">
+      {% for item in knowledge_highlights %}
+      <div class="knowledge-item">
+        <strong>{{ item.entry_name }}</strong>
+        <span>{{ item.category }}</span>
+        <p>{{ item.summary }}</p>
+      </div>
+      {% endfor %}
+    </div>
+  </article>
 </section>
+
+<section class="portal-grid-two">
+  <article class="panel portal-card">
+    <h2>{{ 'Advanced Calculators' if lang == 'en' else 'الحاسبات المتقدمة' }}</h2>
+    <div class="tabs-inline">
+      <button class="btn btn-sm calc-tab active" type="button" data-calc-form="troops-form">{{ 'Troops' if lang == 'en' else 'الجنود' }}</button>
+      <button class="btn btn-sm calc-tab" type="button" data-calc-form="building-form">{{ 'Buildings' if lang == 'en' else 'المباني' }}</button>
+      <button class="btn btn-sm calc-tab" type="button" data-calc-form="research-form">{{ 'Research' if lang == 'en' else 'الأبحاث' }}</button>
+      <button class="btn btn-sm calc-tab" type="button" data-calc-form="academy-form">{{ 'Academy' if lang == 'en' else 'الأكاديمية' }}</button>
+    </div>
+
+    <form id="troops-form" class="stacked calc-form active" data-endpoint="/api/calculators/troops">
+      <label><span>{{ 'Troop Type' if lang == 'en' else 'نوع الجندي' }}</span>
+        <select name="troop_type">
+          {% for key, item in calculator_catalog.troops.items() %}<option value="{{ key }}">{{ item.name_ar }}</option>{% endfor %}
+        </select>
+      </label>
+      <label><span>{{ 'Tier' if lang == 'en' else 'المستوى Tier' }}</span><input type="number" name="tier" min="1" max="11" value="7" required /></label>
+      <label><span>{{ 'Count' if lang == 'en' else 'العدد المطلوب' }}</span><input type="number" name="count" min="1" value="1000" required /></label>
+      <label><span>{{ 'Training Speed %' if lang == 'en' else 'نسبة سرعة التدريب %' }}</span><input type="number" name="speed_bonus_percent" value="0" step="0.1" /></label>
+      <button class="btn btn-primary" type="submit">{{ 'Calculate' if lang == 'en' else 'احسب' }}</button>
+    </form>
+
+    <form id="building-form" class="stacked calc-form" data-endpoint="/api/calculators/building">
+      <label><span>{{ 'Building Type' if lang == 'en' else 'نوع المبنى' }}</span>
+        <select name="target_key">{% for key, item in calculator_catalog.building.items() %}<option value="{{ key }}">{{ item.name_ar }}</option>{% endfor %}</select>
+      </label>
+      <label><span>{{ 'Current Level' if lang == 'en' else 'المستوى الحالي' }}</span><input type="number" name="current_level" min="0" value="10" required /></label>
+      <label><span>{{ 'Target Level' if lang == 'en' else 'المستوى المستهدف' }}</span><input type="number" name="target_level" min="1" value="15" required /></label>
+      <label><span>{{ 'Speed Bonus %' if lang == 'en' else 'نسبة السرعة %' }}</span><input type="number" name="speed_bonus_percent" value="0" step="0.1" /></label>
+      <button class="btn btn-primary" type="submit">{{ 'Calculate' if lang == 'en' else 'احسب' }}</button>
+    </form>
+
+    <form id="research-form" class="stacked calc-form" data-endpoint="/api/calculators/research">
+      <label><span>{{ 'Research Type' if lang == 'en' else 'نوع البحث' }}</span>
+        <select name="target_key">{% for key, item in calculator_catalog.research.items() %}<option value="{{ key }}">{{ item.name_ar }}</option>{% endfor %}</select>
+      </label>
+      <label><span>{{ 'Current Level' if lang == 'en' else 'المستوى الحالي' }}</span><input type="number" name="current_level" min="0" value="8" required /></label>
+      <label><span>{{ 'Target Level' if lang == 'en' else 'المستوى المستهدف' }}</span><input type="number" name="target_level" min="1" value="12" required /></label>
+      <label><span>{{ 'Speed Bonus %' if lang == 'en' else 'نسبة السرعة %' }}</span><input type="number" name="speed_bonus_percent" value="0" step="0.1" /></label>
+      <button class="btn btn-primary" type="submit">{{ 'Calculate' if lang == 'en' else 'احسب' }}</button>
+    </form>
+
+    <form id="academy-form" class="stacked calc-form" data-endpoint="/api/calculators/academy">
+      <input type="hidden" name="target_key" value="academy" />
+      <label><span>{{ 'Current Level' if lang == 'en' else 'المستوى الحالي' }}</span><input type="number" name="current_level" min="0" value="5" required /></label>
+      <label><span>{{ 'Target Level' if lang == 'en' else 'المستوى المستهدف' }}</span><input type="number" name="target_level" min="1" value="10" required /></label>
+      <label><span>{{ 'Speed Bonus %' if lang == 'en' else 'نسبة السرعة %' }}</span><input type="number" name="speed_bonus_percent" value="0" step="0.1" /></label>
+      <button class="btn btn-primary" type="submit">{{ 'Calculate' if lang == 'en' else 'احسب' }}</button>
+    </form>
+
+    <div id="calculator-result" class="result-card muted-result">{{ 'Calculator result will appear here.' if lang == 'en' else 'ستظهر نتيجة الحاسبة هنا.' }}</div>
+  </article>
+
+  <article class="panel portal-card">
+    <h2>{{ 'Bear Trap Map' if lang == 'en' else 'خريطة الدب' }}</h2>
+    <div class="map-summary-line">
+      <span>{{ 'Shape' if lang == 'en' else 'الشكل' }}: <strong>{{ map_data.shape }}</strong></span>
+      <span>{{ 'Layers' if lang == 'en' else 'الطبقات' }}: <strong>{{ map_data.layers }}</strong></span>
+      <span>{{ 'Members' if lang == 'en' else 'الأعضاء' }}: <strong>{{ map_data.points|length }}</strong></span>
+    </div>
+    <div class="bear-map-shell">
+      <svg viewBox="-480 -480 960 960" class="bear-map-svg" role="img" aria-label="Bear trap map">
+        <circle cx="0" cy="0" r="70" class="bear-core"></circle>
+        <text x="0" y="8" text-anchor="middle" class="bear-core-text">{{ 'BEAR' if lang == 'en' else 'الدب' }}</text>
+        {% for point in map_data.points %}
+        <g>
+          <circle cx="{{ point.x }}" cy="{{ point.y }}" r="28" class="member-node"></circle>
+          <text x="{{ point.x }}" y="{{ point.y + 4 }}" text-anchor="middle" class="member-node-text">{{ loop.index }}</text>
+        </g>
+        {% endfor %}
+      </svg>
+    </div>
+    <div class="map-legend-list">
+      {% for point in map_data.points[:12] %}
+      <div class="map-legend-item">
+        <strong>{{ point.slot }}</strong>
+        <span>{{ point.name }}</span>
+        <small>{{ '{:,}'.format(point.power) }} | {{ point.specialization }}</small>
+      </div>
+      {% endfor %}
+    </div>
+  </article>
+</section>
+
+<section class="panel portal-card">
+  <h2>{{ 'Whiteout Survival AI Expert' if lang == 'en' else 'المساعد الذكي الخبير في Whiteout Survival' }}</h2>
+  <form id="ai-chat-form" class="stacked">
+    <label>
+      <span>{{ 'Ask the assistant' if lang == 'en' else 'اسأل المساعد' }}</span>
+      <textarea name="question" rows="4" placeholder="{{ 'Example: Which building should I upgrade next for Bear Trap?' if lang == 'en' else 'مثال: ما أفضل مبنى أرقّيه الآن للتحضير للدب؟' }}"></textarea>
+    </label>
+    <button class="btn btn-primary" type="submit">{{ 'Send' if lang == 'en' else 'إرسال' }}</button>
+  </form>
+  <div id="ai-chat-response" class="chat-response-box muted-result">{{ 'The assistant response will appear here.' if lang == 'en' else 'ستظهر إجابة المساعد هنا.' }}</div>
+</section>
+
+<script>
+  document.querySelectorAll('.calc-tab').forEach(function(button) {
+    button.addEventListener('click', function() {
+      document.querySelectorAll('.calc-tab').forEach(function(item) { item.classList.remove('active'); });
+      document.querySelectorAll('.calc-form').forEach(function(form) { form.classList.remove('active'); });
+      button.classList.add('active');
+      document.getElementById(button.dataset.calcForm).classList.add('active');
+    });
+  });
+
+  document.querySelectorAll('.calc-form').forEach(function(form) {
+    form.addEventListener('submit', async function(event) {
+      event.preventDefault();
+      var payload = Object.fromEntries(new FormData(form).entries());
+      var response = await fetch(form.dataset.endpoint, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload)
+      });
+      var data = await response.json();
+      var target = document.getElementById('calculator-result');
+      if (!response.ok || !data.success) {
+        target.textContent = data.error || 'Calculation failed';
+        target.className = 'result-card error-result';
+        return;
+      }
+      var result = data.result;
+      target.className = 'result-card';
+      target.innerHTML = '<strong>' + result.label + '</strong><br>' +
+        'Food: ' + (result.resources.food || 0) + ' | Wood: ' + (result.resources.wood || 0) +
+        ' | Coal: ' + (result.resources.coal || 0) + ' | Iron: ' + (result.resources.iron || 0) +
+        '<br>{{ "Time" if lang == "en" else "الوقت" }}: ' + result.time_minutes +
+        ' {{ "minutes" if lang == "en" else "دقيقة" }}' +
+        '<br>{{ "Speedups" if lang == "en" else "التسريعات" }}: ' + result.speedups_minutes +
+        ' {{ "minutes" if lang == "en" else "دقيقة" }}';
+    });
+  });
+
+  document.getElementById('ai-chat-form').addEventListener('submit', async function(event) {
+    event.preventDefault();
+    var form = event.currentTarget;
+    var payload = Object.fromEntries(new FormData(form).entries());
+    var response = await fetch('/api/ai/chat', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload)
+    });
+    var data = await response.json();
+    var target = document.getElementById('ai-chat-response');
+    if (!response.ok || !data.success) {
+      target.textContent = data.error || 'AI request failed';
+      target.className = 'chat-response-box error-result';
+      return;
+    }
+    target.className = 'chat-response-box';
+    target.textContent = data.answer;
+  });
+</script>
 
 {% endblock %}

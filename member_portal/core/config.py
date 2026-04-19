@@ -56,6 +56,12 @@ class Config:
     SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
     FROM_EMAIL = os.getenv("FROM_EMAIL", SMTP_USERNAME)
     FROM_NAME = os.getenv("FROM_NAME", "TNT Alliance")
+
+    # ── AI Configuration ──
+    AI_API_KEY = os.getenv("AI_API_KEY", "")
+    AI_MODEL_NAME = os.getenv("AI_MODEL_NAME", "gpt-4.1-mini")
+    AI_API_BASE_URL = os.getenv("AI_API_BASE_URL", "https://api.openai.com/v1/chat/completions")
+    AI_REQUEST_TIMEOUT = int(os.getenv("AI_REQUEST_TIMEOUT", "30"))
     
     # ── اللغات المدعومة ──
     SUPPORTED_LANGUAGES = ["en", "ar"]

@@ -1,94 +1,46 @@
 {% extends "base.html" %}
 {% block content %}
-
-<div class="portal-header">
+<section class="hero-card portal-hero">
   <div>
-    <h1 class="portal-title">{{ 'Registered Members' if lang == 'en' else 'الأعضاء المسجلون' }}</h1>
-    <p class="portal-sub">
-      {{ records|length }} {{ 'member(s) in the database' if lang == 'en' else 'عضو في قاعدة البيانات' }}
-    </p>
+    <h1>{{ 'Members Directory' if lang == 'en' else 'دليل الأعضاء' }}</h1>
+    <p>{{ 'A clean overview of all member accounts and their current game data.' if lang == 'en' else 'عرض منظم لجميع حسابات الأعضاء وبياناتهم الحالية داخل اللعبة.' }}</p>
   </div>
-  <div style="display:flex;gap:.6rem;align-items:center;">
-    <a class="btn btn-ghost" href="/portal">
-      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12l7-7 7 7"/></svg>
-      {{ 'Register Member' if lang == 'en' else 'تسجيل عضو' }}
-    </a>
-    {% if current_user and current_user.is_admin %}
-    <a class="btn btn-ghost" href="/members/export">{{ 'Export CSV' if lang == 'en' else 'تصدير CSV' }}</a>
-    {% endif %}
-  </div>
-</div>
+  <a class="btn btn-primary" href="/register-page">{{ 'Register New Member' if lang == 'en' else 'تسجيل عضو جديد' }}</a>
+</section>
 
-<div class="members-card">
-  {% if records %}
+<section class="panel portal-card">
   <div class="table-wrap">
-    <table class="members-table">
+    <table>
       <thead>
         <tr>
-          <th class="col-seq">#</th>
-          <th>{{ 'Player ID' if lang == 'en' else 'المعرف' }}</th>
-          <th>{{ 'Current Name' if lang == 'en' else 'الاسم الحالي' }}</th>
-          <th>{{ 'Alliance' if lang == 'en' else 'التحالف' }}</th>
-          <th>{{ 'Rank' if lang == 'en' else 'الرتبة' }}</th>
-          {% for field in fields %}
-          <th>{{ field.label }}</th>
-          {% endfor %}
-          <th>{{ 'Notes' if lang == 'en' else 'ملاحظات' }}</th>
-          <th>{{ 'By' if lang == 'en' else 'بواسطة' }}</th>
-          <th>{{ 'Date' if lang == 'en' else 'التاريخ' }}</th>
-          <th>{{ 'Actions' if lang == 'en' else 'إجراءات' }}</th>
+          <th>#</th>
+          <th>{{ 'Player' if lang == 'en' else 'اللاعب' }}</th>
+          <th>{{ 'State' if lang == 'en' else 'الولاية' }}</th>
+          <th>{{ 'Power' if lang == 'en' else 'القوة' }}</th>
+          <th>{{ 'Specialization' if lang == 'en' else 'التخصص' }}</th>
+          <th>{{ 'Alliance Role' if lang == 'en' else 'الدور' }}</th>
+          <th>{{ 'Status' if lang == 'en' else 'الحالة' }}</th>
+          <th>{{ 'Created' if lang == 'en' else 'تاريخ الإنشاء' }}</th>
         </tr>
       </thead>
       <tbody>
         {% for rec in records %}
-        {% set delete_message = 'Delete this member record?' if lang == 'en' else 'هل تريد حذف سجل هذا العضو؟' %}
-        <tr class="member-row">
-          <td class="col-seq">{{ loop.index }}</td>
-          <td class="uid-cell">{{ rec.member_uid }}</td>
-          <td class="name-cell"><strong>{{ rec.member_name }}</strong></td>
-          <td>{{ rec.alliance }}</td>
-          <td>{{ rec.rank }}</td>
-          {% for field in fields %}
-          {% set val = rec.dv_by_label.get(field.label, '') %}
-          <td>
-            {% if val %}
-            <span class="value-badge {% if val == 'Active' %}badge-active{% elif val == 'Inactive' %}badge-inactive{% elif val == 'T11' %}badge-t11{% elif val == 'T12' %}badge-t12{% else %}badge-default{% endif %}">{{ val }}</span>
-            {% else %}<span class="null-val">—</span>{% endif %}
-          </td>
-          {% endfor %}
-          <td class="notes-cell">{{ rec.notes or '—' }}</td>
-          <td>{{ rec.username or 'system' }}</td>
-          <td class="date-cell">{{ rec.created_at[:10] }}</td>
-          <td>
-            <div class="table-actions">
-              {% if current_user and current_user.is_admin %}
-              <a class="btn btn-ghost btn-sm" href="/records/{{ rec.id }}/edit">{{ 'Edit' if lang == 'en' else 'تعديل' }}</a>
-              <form method="post" action="/records/{{ rec.id }}/delete" onsubmit="return confirm('{{ delete_message }}');">
-                <button class="btn btn-danger btn-sm" type="submit">{{ 'Delete' if lang == 'en' else 'حذف' }}</button>
-              </form>
-              {% else %}
-              <span class="null-val">{{ 'Admin only' if lang == 'en' else 'للأدمن فقط' }}</span>
-              {% endif %}
-            </div>
-          </td>
+        <tr>
+          <td>{{ loop.index }}</td>
+          <td><strong>{{ rec.game_name or rec.username }}</strong><br><small>{{ rec.email or '-' }}</small></td>
+          <td>{{ rec.state or '-' }}</td>
+          <td>{{ '{:,}'.format(rec.player_power or 0) }}</td>
+          <td>{{ rec.specialization or '-' }}</td>
+          <td>{{ rec.alliance_role or '-' }}</td>
+          <td>{% if rec.is_banned %}<span class="badge badge-muted">{{ 'Blocked' if lang == 'en' else 'محظور' }}</span>{% else %}<span class="badge badge-success">{{ 'Active' if lang == 'en' else 'نشط' }}</span>{% endif %}</td>
+          <td>{{ rec.created_at[:10] }}</td>
         </tr>
+        {% else %}
+        <tr><td colspan="8">{{ 'No members found.' if lang == 'en' else 'لا يوجد أعضاء بعد.' }}</td></tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
-  {% else %}
-  <div class="empty-state">
-    <div class="empty-icon">👥</div>
-    <p>{{ 'No members have been registered yet.' if lang == 'en' else 'لا يوجد أعضاء مسجلون بعد.' }}</p>
-    <a class="btn btn-primary" href="/portal">{{ 'Register First Member' if lang == 'en' else 'سجل أول عضو' }}</a>
-  </div>
-  {% endif %}
-  {% if current_user and current_user.is_admin %}
-    {% set del_all_msg = 'Delete ALL member records? This cannot be undone.' if lang == 'en' else 'هل تريد حذف جميع سجلات الأعضاء؟ لا يمكن التراجع.' %}
-    <form method="post" action="/records/delete-all" onsubmit="return confirm('{{ del_all_msg }}');">
-      <button class="btn btn-danger" type="submit">{{ 'Delete All' if lang == 'en' else 'حذف الكل' }}</button>
-    </form>
-  {% endif %}
-</div>
+</section>
 
 {% endblock %}

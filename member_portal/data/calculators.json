@@ -1,0 +1,98 @@
+{
+  "troops": {
+    "infantry": {
+      "name_ar": "المشاة",
+      "tiers": {
+        "1": {"food": 80, "wood": 40, "coal": 0, "iron": 0, "time_minutes": 1},
+        "2": {"food": 140, "wood": 90, "coal": 0, "iron": 0, "time_minutes": 2},
+        "3": {"food": 220, "wood": 150, "coal": 20, "iron": 0, "time_minutes": 4},
+        "4": {"food": 360, "wood": 240, "coal": 80, "iron": 0, "time_minutes": 7},
+        "5": {"food": 540, "wood": 360, "coal": 160, "iron": 20, "time_minutes": 12},
+        "6": {"food": 760, "wood": 520, "coal": 280, "iron": 60, "time_minutes": 18},
+        "7": {"food": 1050, "wood": 720, "coal": 420, "iron": 110, "time_minutes": 26},
+        "8": {"food": 1420, "wood": 980, "coal": 620, "iron": 180, "time_minutes": 38},
+        "9": {"food": 1880, "wood": 1310, "coal": 880, "iron": 270, "time_minutes": 54},
+        "10": {"food": 2450, "wood": 1710, "coal": 1190, "iron": 390, "time_minutes": 74},
+        "11": {"food": 3180, "wood": 2220, "coal": 1580, "iron": 530, "time_minutes": 98}
+      }
+    },
+    "lancer": {
+      "name_ar": "الرمّاحة",
+      "tiers": {
+        "1": {"food": 90, "wood": 50, "coal": 0, "iron": 0, "time_minutes": 1},
+        "2": {"food": 155, "wood": 105, "coal": 0, "iron": 0, "time_minutes": 2},
+        "3": {"food": 240, "wood": 170, "coal": 30, "iron": 0, "time_minutes": 4},
+        "4": {"food": 390, "wood": 270, "coal": 90, "iron": 0, "time_minutes": 8},
+        "5": {"food": 590, "wood": 390, "coal": 170, "iron": 25, "time_minutes": 13},
+        "6": {"food": 820, "wood": 560, "coal": 300, "iron": 70, "time_minutes": 19},
+        "7": {"food": 1130, "wood": 780, "coal": 450, "iron": 120, "time_minutes": 28},
+        "8": {"food": 1520, "wood": 1060, "coal": 650, "iron": 190, "time_minutes": 40},
+        "9": {"food": 2010, "wood": 1410, "coal": 920, "iron": 285, "time_minutes": 57},
+        "10": {"food": 2620, "wood": 1840, "coal": 1240, "iron": 410, "time_minutes": 78},
+        "11": {"food": 3390, "wood": 2380, "coal": 1650, "iron": 555, "time_minutes": 102}
+      }
+    },
+    "marksman": {
+      "name_ar": "الرماة",
+      "tiers": {
+        "1": {"food": 85, "wood": 45, "coal": 0, "iron": 0, "time_minutes": 1},
+        "2": {"food": 150, "wood": 98, "coal": 0, "iron": 0, "time_minutes": 2},
+        "3": {"food": 230, "wood": 160, "coal": 25, "iron": 0, "time_minutes": 4},
+        "4": {"food": 375, "wood": 255, "coal": 85, "iron": 0, "time_minutes": 7},
+        "5": {"food": 565, "wood": 375, "coal": 165, "iron": 22, "time_minutes": 12},
+        "6": {"food": 790, "wood": 540, "coal": 290, "iron": 65, "time_minutes": 18},
+        "7": {"food": 1090, "wood": 750, "coal": 440, "iron": 115, "time_minutes": 27},
+        "8": {"food": 1470, "wood": 1020, "coal": 635, "iron": 185, "time_minutes": 39},
+        "9": {"food": 1940, "wood": 1360, "coal": 900, "iron": 280, "time_minutes": 55},
+        "10": {"food": 2540, "wood": 1780, "coal": 1210, "iron": 400, "time_minutes": 76},
+        "11": {"food": 3280, "wood": 2300, "coal": 1610, "iron": 545, "time_minutes": 100}
+      }
+    }
+  },
+  "building": {
+    "hq": {
+      "name_ar": "المقر الرئيسي",
+      "base": {"food": 4200, "wood": 3800, "coal": 1100, "iron": 200, "time_minutes": 18},
+      "growth": 1.28
+    },
+    "barracks": {
+      "name_ar": "الثكنة",
+      "base": {"food": 2800, "wood": 2500, "coal": 700, "iron": 120, "time_minutes": 14},
+      "growth": 1.24
+    },
+    "research_center": {
+      "name_ar": "مركز الأبحاث",
+      "base": {"food": 3000, "wood": 2900, "coal": 850, "iron": 160, "time_minutes": 16},
+      "growth": 1.26
+    },
+    "hospital": {
+      "name_ar": "المستشفى",
+      "base": {"food": 2400, "wood": 2200, "coal": 600, "iron": 110, "time_minutes": 12},
+      "growth": 1.22
+    }
+  },
+  "research": {
+    "battle": {
+      "name_ar": "أبحاث القتال",
+      "base": {"food": 2200, "wood": 2100, "coal": 900, "iron": 180, "time_minutes": 20},
+      "growth": 1.23
+    },
+    "development": {
+      "name_ar": "أبحاث التطوير",
+      "base": {"food": 1800, "wood": 1750, "coal": 700, "iron": 120, "time_minutes": 17},
+      "growth": 1.2
+    },
+    "economy": {
+      "name_ar": "أبحاث الاقتصاد",
+      "base": {"food": 1600, "wood": 1500, "coal": 650, "iron": 100, "time_minutes": 15},
+      "growth": 1.18
+    }
+  },
+  "academy": {
+    "academy": {
+      "name_ar": "الأكاديمية",
+      "base": {"food": 3200, "wood": 3100, "coal": 1200, "iron": 220, "time_minutes": 22},
+      "growth": 1.27
+    }
+  }
+}

@@ -22,13 +22,11 @@
 
     <nav class="nav-links">
       {% if current_user %}
-      <a class="nav-link {% if request_path == '/portal' %}nav-link-active{% endif %}" href="/portal">{{ 'Lists' if lang == 'en' else 'القوائم' }}</a>
-      <a class="nav-link {% if request_path == '/members' %}nav-link-active{% endif %}" href="/members">{{ 'Members' if lang == 'en' else 'الأعضاء' }}</a>
-      {% if current_user.is_admin %}
-      <a class="nav-link {% if request_path == '/dashboard' %}nav-link-active{% endif %}" href="/dashboard">{{ 'Dashboard' if lang == 'en' else 'لوحة التحكم' }}</a>
-      {% endif %}
+      <a class="nav-link {% if request_path == '/portal' %}nav-link-active{% endif %}" href="/portal">{{ 'Member Portal' if lang == 'en' else 'بوابة الأعضاء' }}</a>
+      <a class="nav-link {% if request_path == '/members' %}nav-link-active{% endif %}" href="/members">{{ 'Members Directory' if lang == 'en' else 'دليل الأعضاء' }}</a>
+      <a class="nav-link {% if request_path == '/profile' %}nav-link-active{% endif %}" href="/profile">{{ 'Profile' if lang == 'en' else 'الملف الشخصي' }}</a>
       {% if current_user.is_owner %}
-      <a class="nav-link nav-link-owner {% if request_path == '/owner' %}nav-link-active{% endif %}" href="/owner">👑 Owner</a>
+      <a class="nav-link nav-link-owner {% if request_path == '/owner' %}nav-link-active{% endif %}" href="/owner">{{ 'Owner Dashboard' if lang == 'en' else 'لوحة المالك' }}</a>
       {% endif %}
 
       <div class="profile-nav" id="profileNav">
@@ -100,96 +98,7 @@
   {% if flash %}
   <div class="flash flash-{{ flash.level }}">{{ flash.text }}</div>
   {% endif %}
-
-  {% if current_user and current_user.is_admin %}
-  <!-- SIDEBAR -->
-  <div class="sidebar" id="sidebar">
-    <div class="sidebar-brand">
-      <span class="sidebar-brand-badge">TNT</span>
-      <span class="sidebar-brand-label">Command</span>
-    </div>
-
-    <nav class="sidebar-nav">
-      <div class="sidebar-section-label">{{ 'Main' if lang == 'en' else 'الرئيسية' }}</div>
-      <a class="sidebar-link {% if request_path == '/dashboard' %}active{% endif %}" href="/dashboard">
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
-        {{ 'Dashboard' if lang == 'en' else 'لوحة التحكم' }}
-      </a>
-      <a class="sidebar-link {% if request_path == '/portal' %}active{% endif %}" href="/portal">
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 17H7A5 5 0 017 7h2M15 7h2a5 5 0 010 10h-2M8 12h8"/></svg>
-        {{ 'Lists' if lang == 'en' else 'القوائم' }}
-      </a>
-      <a class="sidebar-link {% if request_path == '/members' %}active{% endif %}" href="/members">
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zM23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
-        {{ 'Members' if lang == 'en' else 'الأعضاء' }}
-      </a>
-      <a class="sidebar-link {% if request_path == '/transfers' %}active{% endif %}" href="/transfers">
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8h1a4 4 0 010 8h-1M2 8h16v9a4 4 0 01-4 4H6a4 4 0 01-4-4V8zM6 1v3M10 1v3M14 1v3"/></svg>
-        {{ 'Transfers' if lang == 'en' else 'النقلات' }}
-      </a>
-
-      <div class="sidebar-section-label">{{ 'War & Teams' if lang == 'en' else 'الحرب والفرق' }}</div>
-      <a class="sidebar-link {% if request_path == '/rally-leaders' %}active{% endif %}" href="/rally-leaders">
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-        {{ 'Rally Leaders' if lang == 'en' else 'قادة التجمع' }}
-      </a>
-      <a class="sidebar-link {% if request_path == '/teams' %}active{% endif %}" href="/teams">
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 014-4h4a4 4 0 014 4v2M16 3.13a4 4 0 010 7.75M21 21v-2a4 4 0 00-3-3.87"/></svg>
-        {{ 'Teams' if lang == 'en' else 'الفرق' }}
-      </a>
-      <a class="sidebar-link {% if request_path == '/wars' %}active{% endif %}" href="/wars">
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.5 10c-.83 0-1.5-.67-1.5-1.5v-5c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5v5c0 .83-.67 1.5-1.5 1.5z"/><path d="M20.5 10H19V8.5c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/><path d="M9.5 14c.83 0 1.5.67 1.5 1.5v5c0 .83-.67 1.5-1.5 1.5S8 21.33 8 20.5v-5c0-.83.67-1.5 1.5-1.5z"/><path d="M3.5 14H5v1.5c0 .83-.67 1.5-1.5 1.5S2 16.33 2 15.5 2.67 14 3.5 14z"/><path d="M14 14.5c0-.83.67-1.5 1.5-1.5h5c.83 0 1.5.67 1.5 1.5s-.67 1.5-1.5 1.5h-5c-.83 0-1.5-.67-1.5-1.5z"/><path d="M15.5 19H14v1.5c0 .83.67 1.5 1.5 1.5s1.5-.67 1.5-1.5-.67-1.5-1.5-1.5z"/><path d="M10 9.5C10 8.67 9.33 8 8.5 8h-5C2.67 8 2 8.67 2 9.5S2.67 11 3.5 11h5c.83 0 1.5-.67 1.5-1.5z"/><path d="M8.5 5H10V3.5C10 2.67 9.33 2 8.5 2S7 2.67 7 3.5 7.67 5 8.5 5z"/></svg>
-        {{ 'Wars' if lang == 'en' else 'الحروب' }}
-      </a>
-      <a class="sidebar-link {% if request_path == '/missions' %}active{% endif %}" href="/missions">
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
-        {{ 'Missions' if lang == 'en' else 'المهام' }}
-      </a>
-
-      <div class="sidebar-section-label">{{ 'Data' if lang == 'en' else 'البيانات' }}</div>
-      <a class="sidebar-link {% if request_path == '/resources' %}active{% endif %}" href="/resources">
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
-        {{ 'Resources' if lang == 'en' else 'الموارد' }}
-      </a>
-      <a class="sidebar-link {% if request_path == '/export' %}active{% endif %}" href="/export">
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
-        {{ 'Export Center' if lang == 'en' else 'تصدير البيانات' }}
-      </a>
-
-      <div class="sidebar-section-label">{{ 'Settings' if lang == 'en' else 'الإعدادات' }}</div>
-      <a class="sidebar-link {% if request_path == '/discord-settings' %}active{% endif %}" href="/discord-settings">
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
-        {{ 'Discord' if lang == 'en' else 'ديسكورد' }}
-      </a>
-      {% if current_user.is_owner %}
-      <a class="sidebar-link sidebar-link-owner {% if request_path == '/owner' %}active{% endif %}" href="/owner">
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-        {{ 'Owner Panel' if lang == 'en' else 'لوحة المالك' }}
-      </a>
-      {% endif %}
-    </nav>
-
-    <div class="sidebar-user">
-      <div class="sidebar-user-avatar">{{ current_user.username[0] | upper }}</div>
-      <div class="sidebar-user-info">
-        <span class="sidebar-user-name">{{ current_user.username }}</span>
-        <span class="sidebar-user-role">{{ 'Admin' if current_user.is_admin else 'Member' }}</span>
-      </div>
-      <form method="post" action="/logout" style="margin-left:auto">
-        <button type="submit" class="sidebar-logout-btn" title="Logout">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg>
-        </button>
-      </form>
-    </div>
-  </div>
-  <button class="sidebar-toggle" id="sidebarToggle" onclick="toggleSidebar()" aria-label="Toggle sidebar">☰</button>
-  <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
-  {% endif %}
-  {% if current_user and current_user.is_admin %}
-  <main class="container sidebar-layout">
-  {% else %}
   <main class="container">
-  {% endif %}
     {% block content %}{% endblock %}
   </main>
 
@@ -199,12 +108,10 @@
       if (nav) nav.classList.toggle('open');
     }
     function toggleSidebar() {
-      document.getElementById('sidebar').classList.toggle('open');
-      document.getElementById('sidebarOverlay').classList.toggle('show');
+      return false;
     }
     function closeSidebar() {
-      document.getElementById('sidebar').classList.remove('open');
-      document.getElementById('sidebarOverlay').classList.remove('show');
+      return false;
     }
 
     document.addEventListener('click', function (e) {

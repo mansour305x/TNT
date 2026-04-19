@@ -332,6 +332,69 @@ class Database:
             FOREIGN KEY(created_by) REFERENCES users(id)
         );
 
+        -- ── إعدادات النظام العامة ──
+        CREATE TABLE IF NOT EXISTS system_settings (
+            setting_key TEXT PRIMARY KEY,
+            setting_value TEXT NOT NULL,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+
+        -- ── معاملات الحاسبات ──
+        CREATE TABLE IF NOT EXISTS calculator_modifiers (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            calculator_type TEXT NOT NULL,
+            target_key TEXT NOT NULL,
+            resource_key TEXT NOT NULL,
+            multiplier REAL NOT NULL DEFAULT 1.0,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(calculator_type, target_key, resource_key)
+        );
+
+        -- ── قاعدة معرفة اللعبة ──
+        CREATE TABLE IF NOT EXISTS knowledge_entries (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            category TEXT NOT NULL,
+            entry_name TEXT NOT NULL,
+            tags TEXT DEFAULT '',
+            summary TEXT NOT NULL,
+            metadata_json TEXT DEFAULT '{}',
+            source TEXT DEFAULT 'seed',
+            is_active INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(category, entry_name)
+        );
+
+        -- ── توزيع الأعضاء على الماب ──
+        CREATE TABLE IF NOT EXISTS member_positions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            state_id INTEGER,
+            user_id INTEGER,
+            member_record_id INTEGER,
+            slot_label TEXT NOT NULL,
+            shape TEXT NOT NULL,
+            pos_x REAL NOT NULL,
+            pos_y REAL NOT NULL,
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            assigned_power INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(state_id) REFERENCES states(id) ON DELETE CASCADE,
+            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+            FOREIGN KEY(member_record_id) REFERENCES member_records(id) ON DELETE CASCADE
+        );
+
+        -- ── سجل محادثة المساعد الذكي ──
+        CREATE TABLE IF NOT EXISTS ai_chat_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            question TEXT NOT NULL,
+            answer TEXT NOT NULL,
+            context_json TEXT DEFAULT '{}',
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE SET NULL
+        );
+
         -- ── الفهارس للأداء ──
         CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
         CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
@@ -342,6 +405,10 @@ class Database:
         CREATE INDEX IF NOT EXISTS idx_state_sessions_state ON state_sessions(state_id);
         CREATE INDEX IF NOT EXISTS idx_state_sessions_token ON state_sessions(session_token);
         CREATE INDEX IF NOT EXISTS idx_member_records_state ON member_records(state_id);
+        CREATE INDEX IF NOT EXISTS idx_member_positions_state ON member_positions(state_id);
+        CREATE INDEX IF NOT EXISTS idx_member_positions_user ON member_positions(user_id);
+        CREATE INDEX IF NOT EXISTS idx_knowledge_entries_category ON knowledge_entries(category);
+        CREATE INDEX IF NOT EXISTS idx_ai_chat_logs_user ON ai_chat_logs(user_id);
         CREATE INDEX IF NOT EXISTS idx_activity_logs_user ON activity_logs(user_id);
         CREATE INDEX IF NOT EXISTS idx_activity_logs_created ON activity_logs(created_at);
         """
@@ -356,6 +423,43 @@ class Database:
         if not self.ensure_column("state_sessions", "user_agent", "TEXT"):
             logger.error("Failed to ensure state_sessions.user_agent column")
             return False
+
+        user_columns = [
+            ("state", "TEXT DEFAULT ''"),
+            ("state_id", "INTEGER REFERENCES states(id)"),
+            ("game_name", "TEXT DEFAULT ''"),
+            ("player_power", "INTEGER NOT NULL DEFAULT 0"),
+            ("specialization", "TEXT DEFAULT ''"),
+            ("discord_id", "TEXT DEFAULT ''"),
+            ("alliance_role", "TEXT DEFAULT ''"),
+            ("is_banned", "INTEGER NOT NULL DEFAULT 0"),
+            ("building_levels_json", "TEXT DEFAULT '{}'"),
+            ("research_levels_json", "TEXT DEFAULT '{}'"),
+            ("academy_level", "INTEGER NOT NULL DEFAULT 0"),
+        ]
+        for column_name, column_type in user_columns:
+            if not self.ensure_column("users", column_name, column_type):
+                logger.error("Failed to ensure users.%s column", column_name)
+                return False
+
+        state_columns = [
+            ("contact_email", "TEXT DEFAULT ''"),
+            ("contact_discord", "TEXT DEFAULT ''"),
+        ]
+        for column_name, column_type in state_columns:
+            if not self.ensure_column("states", column_name, column_type):
+                logger.error("Failed to ensure states.%s column", column_name)
+                return False
+
+        oauth_columns = [
+            ("access_token", "TEXT DEFAULT ''"),
+            ("refresh_token", "TEXT DEFAULT ''"),
+            ("token_expires_at", "TEXT"),
+        ]
+        for column_name, column_type in oauth_columns:
+            if not self.ensure_column("oauth_identities", column_name, column_type):
+                logger.error("Failed to ensure oauth_identities.%s column", column_name)
+                return False
 
         return True
 

@@ -142,6 +142,9 @@ class GoogleOAuthService:
             "SELECT id FROM oauth_identities WHERE provider = ? AND provider_id = ?",
             ("google", google_id),
         )
+        expires_at = None
+        if token_data.get("expires_in"):
+            expires_at = datetime.now().timestamp() + int(token_data["expires_in"])
         if not identity_exists:
             db.insert(
                 "oauth_identities",
@@ -152,7 +155,25 @@ class GoogleOAuthService:
                     "email": email,
                     "name": name,
                     "avatar_url": avatar_url,
+                    "access_token": token_data.get("access_token", ""),
+                    "refresh_token": token_data.get("refresh_token", ""),
+                    "token_expires_at": datetime.fromtimestamp(expires_at).isoformat() if expires_at else None,
                 },
+            )
+        else:
+            db.update(
+                "oauth_identities",
+                {
+                    "user_id": user_id,
+                    "email": email,
+                    "name": name,
+                    "avatar_url": avatar_url,
+                    "access_token": token_data.get("access_token", ""),
+                    "refresh_token": token_data.get("refresh_token", ""),
+                    "token_expires_at": datetime.fromtimestamp(expires_at).isoformat() if expires_at else None,
+                    "updated_at": datetime.now().isoformat(),
+                },
+                {"id": identity_exists["id"]},
             )
 
         return True, "تم تسجيل الدخول بنجاح", user_id
@@ -290,6 +311,9 @@ class DiscordOAuthService:
             "SELECT id FROM oauth_identities WHERE provider = ? AND provider_id = ?",
             ("discord", discord_id),
         )
+        expires_at = None
+        if token_data.get("expires_in"):
+            expires_at = datetime.now().timestamp() + int(token_data["expires_in"])
         if not identity_exists:
             db.insert(
                 "oauth_identities",
@@ -300,7 +324,25 @@ class DiscordOAuthService:
                     "email": email,
                     "name": username,
                     "avatar_url": avatar_url,
+                    "access_token": token_data.get("access_token", ""),
+                    "refresh_token": token_data.get("refresh_token", ""),
+                    "token_expires_at": datetime.fromtimestamp(expires_at).isoformat() if expires_at else None,
                 },
+            )
+        else:
+            db.update(
+                "oauth_identities",
+                {
+                    "user_id": user_id,
+                    "email": email,
+                    "name": username,
+                    "avatar_url": avatar_url,
+                    "access_token": token_data.get("access_token", ""),
+                    "refresh_token": token_data.get("refresh_token", ""),
+                    "token_expires_at": datetime.fromtimestamp(expires_at).isoformat() if expires_at else None,
+                    "updated_at": datetime.now().isoformat(),
+                },
+                {"id": identity_exists["id"]},
             )
 
         return True, "تم تسجيل الدخول بنجاح", user_id

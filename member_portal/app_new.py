@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 from datetime import datetime, timedelta
@@ -15,6 +16,7 @@ from core.config import Config
 from core.database import db
 from core.permissions import PermissionManager, RoleManager, StatePermissionManager
 from middleware import error_handler_middleware, logging_middleware, session_middleware
+from services.game_portal_service import GamePortalService
 
 logging.basicConfig(
     level=logging.INFO,
@@ -45,12 +47,16 @@ class TNTPortalApp:
         self.app.router.add_get("/register-page", self.register_page)
         self.app.router.add_get("/health", self.health_check)
         self.app.router.add_get("/api/stats", self.public_stats)
+        self.app.router.add_get("/state-portal", self.state_portal_page)
 
         self.app.router.add_post("/api/auth/register", self.register)
         self.app.router.add_post("/api/auth/login", self.login)
         self.app.router.add_post("/api/auth/logout", self.logout)
         self.app.router.add_post("/api/auth/forgot-password", self.forgot_password)
         self.app.router.add_post("/api/auth/reset-password", self.reset_password)
+        self.app.router.add_post("/api/calculators/{calculator_type}", self.calculate_api)
+        self.app.router.add_get("/api/map", self.map_api)
+        self.app.router.add_post("/api/ai/chat", self.ai_chat_api)
 
         self.app.router.add_get("/auth/google", self.google_auth)
         self.app.router.add_get("/auth/google/callback", self.google_callback)
@@ -101,7 +107,16 @@ class TNTPortalApp:
         self.app.router.add_post("/register", self.form_register)
         self.app.router.add_post("/logout", self.form_logout)
         self.app.router.add_post("/state-login", self.form_state_login)
+        self.app.router.add_post("/state-logout", self.form_state_logout)
         self.app.router.add_post("/set-language", self.set_language)
+        self.app.router.add_post("/owner/states/create", self.owner_create_state)
+        self.app.router.add_post("/owner/states/{state_id}/update", self.owner_update_state)
+        self.app.router.add_post("/owner/states/{state_id}/toggle", self.owner_toggle_state)
+        self.app.router.add_post("/owner/members/{user_id}/update", self.owner_update_member)
+        self.app.router.add_post("/owner/members/{user_id}/ban", self.owner_toggle_member_ban)
+        self.app.router.add_post("/owner/settings/map", self.owner_map_settings)
+        self.app.router.add_post("/owner/settings/calculators", self.owner_calculator_settings)
+        self.app.router.add_post("/owner/knowledge", self.owner_save_knowledge)
 
         # ── Page routes ──
         self.app.router.add_get("/portal", self.portal_page)
@@ -176,19 +191,12 @@ class TNTPortalApp:
         )
 
     async def register(self, request: web.Request) -> web.Response:
-        from services.auth_service import AuthService
-
         try:
             payload = await request.json()
         except Exception:
             return web.json_response({"success": False, "error": "بيانات JSON غير صالحة"}, status=400)
 
-        success, message, user_id = AuthService.register_user(
-            payload.get("username", "").strip(),
-            payload.get("email", "").strip(),
-            payload.get("password", ""),
-            payload.get("full_name", "").strip(),
-        )
+        success, message, user_id = GamePortalService.register_member(payload)
         status = 201 if success else 400
         body = {"success": success, "message": message}
         if user_id:
@@ -198,18 +206,34 @@ class TNTPortalApp:
         return web.json_response(body, status=status)
 
     async def login(self, request: web.Request) -> web.Response:
-        from services.auth_service import AuthService
-
         try:
             payload = await request.json()
         except Exception:
             return web.json_response({"success": False, "error": "بيانات JSON غير صالحة"}, status=400)
 
-        success, message, user_id = AuthService.login(
-            payload.get("username", "").strip(),
-            payload.get("password", ""),
-            request.remote,
-        )
+        login_type = payload.get("login_type", "member").strip().lower()
+        login_id = payload.get("email", payload.get("username", "")).strip()
+        password = payload.get("password", "")
+
+        if login_type == "state":
+            success, message, state_id = GamePortalService.authenticate_state(login_id, password)
+            if not success or not state_id:
+                return web.json_response({"success": False, "error": message}, status=401)
+            token = self._create_state_session(state_id, request)
+            if not token:
+                return web.json_response({"success": False, "error": "فشل إنشاء جلسة الولاية"}, status=500)
+            response = web.json_response({"success": True, "message": message, "state_id": state_id, "redirect": "/state-portal"})
+            response.set_cookie(
+                Config.STATE_SESSION_COOKIE_NAME,
+                token,
+                max_age=Config.SESSION_TTL_SECONDS,
+                httponly=True,
+                secure=self._is_secure_cookie_enabled(),
+                samesite="Lax",
+            )
+            return response
+
+        success, message, user_id = GamePortalService.authenticate_member(login_id, password, request.remote)
         if not success or not user_id:
             return web.json_response({"success": False, "error": message}, status=401)
 
@@ -217,7 +241,15 @@ class TNTPortalApp:
         if not session_token:
             return web.json_response({"success": False, "error": "فشل إنشاء جلسة المستخدم"}, status=500)
 
-        response = web.json_response({"success": True, "message": message, "user_id": user_id})
+        current_user = db.fetchone("SELECT role FROM users WHERE id = ?", (user_id,)) or {}
+        response = web.json_response(
+            {
+                "success": True,
+                "message": message,
+                "user_id": user_id,
+                "redirect": "/owner" if current_user.get("role") == "super_owner" else "/portal",
+            }
+        )
         response.set_cookie(
             Config.SESSION_COOKIE_NAME,
             session_token,
@@ -909,13 +941,38 @@ class TNTPortalApp:
         return request.cookies.get("lang", "ar")
 
     async def form_login(self, request: web.Request) -> web.StreamResponse:
-        from services.auth_service import AuthService
-
         data = await request.post()
-        login_id = data.get("login_id", "").strip()
+        login_id = data.get("email", data.get("login_id", "")).strip()
         password = data.get("password", "")
+        login_type = data.get("login_type", "member").strip().lower()
         lang = self._lang(request)
-        success, message, user_id = AuthService.login(login_id, password, request.remote)
+        if login_type == "state":
+            success, message, state_id = GamePortalService.authenticate_state(login_id, password)
+            if not success or not state_id:
+                return await self._render_template("auth.html", {
+                    "lang": lang,
+                    "title": "TNT Login",
+                    "flash": {"level": "error", "text": message},
+                })
+            token = self._create_state_session(state_id, request)
+            if not token:
+                return await self._render_template("auth.html", {
+                    "lang": lang,
+                    "title": "TNT Login",
+                    "flash": {"level": "error", "text": "فشل إنشاء جلسة الولاية"},
+                })
+            response = web.HTTPFound("/state-portal")
+            response.set_cookie(
+                Config.STATE_SESSION_COOKIE_NAME,
+                token,
+                max_age=Config.SESSION_TTL_SECONDS,
+                httponly=True,
+                secure=self._is_secure_cookie_enabled(),
+                samesite="Lax",
+            )
+            return response
+
+        success, message, user_id = GamePortalService.authenticate_member(login_id, password, request.remote)
         if not success or not user_id:
             return await self._render_template("auth.html", {
                 "lang": lang, "title": "TNT Login",
@@ -927,7 +984,8 @@ class TNTPortalApp:
                 "lang": lang, "title": "TNT Login",
                 "flash": {"level": "error", "text": "فشل إنشاء الجلسة"},
             })
-        response = web.HTTPFound("/portal")
+        role_row = db.fetchone("SELECT role FROM users WHERE id = ?", (user_id,)) or {}
+        response = web.HTTPFound("/owner" if role_row.get("role") == "super_owner" else "/portal")
         response.set_cookie(
             Config.SESSION_COOKIE_NAME, session_token,
             max_age=Config.SESSION_TTL_SECONDS, httponly=True,
@@ -936,22 +994,26 @@ class TNTPortalApp:
         return response
 
     async def form_register(self, request: web.Request) -> web.StreamResponse:
-        from services.auth_service import AuthService
-
         data = await request.post()
         lang = self._lang(request)
-        success, message, user_id = AuthService.register_user(
-            data.get("username", "").strip(),
-            data.get("email", "").strip(),
-            data.get("password", ""),
-            data.get("full_name", data.get("username", "")).strip(),
-        )
+        success, message, user_id = GamePortalService.register_member(dict(data))
         if not success:
             return await self._render_template("register.html", {
                 "lang": lang, "title": "Register",
                 "flash": {"level": "error", "text": message},
             })
-        return web.HTTPFound("/?registered=1")
+        response = web.HTTPFound("/portal")
+        session_token = self._create_user_session(user_id, request) if user_id else None
+        if session_token:
+            response.set_cookie(
+                Config.SESSION_COOKIE_NAME,
+                session_token,
+                max_age=Config.SESSION_TTL_SECONDS,
+                httponly=True,
+                secure=self._is_secure_cookie_enabled(),
+                samesite="Lax",
+            )
+        return response
 
     async def form_logout(self, request: web.Request) -> web.StreamResponse:
         session_token = request.cookies.get(Config.SESSION_COOKIE_NAME)
@@ -962,39 +1024,35 @@ class TNTPortalApp:
         return response
 
     async def form_state_login(self, request: web.Request) -> web.StreamResponse:
-        from utils.security import SecurityManager
-
         data = await request.post()
-        state_name = data.get("state_name", "").strip()
+        state_name = data.get("state_name", data.get("email", "")).strip()
         password = data.get("password", "")
-        state = db.fetchone(
-            "SELECT id, password_hash FROM states WHERE state_name = ? AND is_active = 1",
-            (state_name,),
-        )
-        if not state or not SecurityManager.verify_password(password, state["password_hash"]):
+        success, message, state_id = GamePortalService.authenticate_state(state_name, password)
+        if not success or not state_id:
             return await self._render_template("state_auth.html", {
                 "lang": "en", "title": "State Login",
-                "flash": {"level": "error", "text": "Invalid state name or password"},
+                "flash": {"level": "error", "text": message},
             })
-        token = SecurityManager.generate_token()
-        expires_at = (datetime.now() + timedelta(seconds=Config.SESSION_TTL_SECONDS)).isoformat()
-        inserted_id = db.insert("state_sessions", {
-            "state_id": state["id"], "session_token": token,
-            "ip_address": request.remote,
-            "user_agent": request.headers.get("User-Agent", ""),
-            "expires_at": expires_at,
-        })
-        if not inserted_id:
+        token = self._create_state_session(state_id, request)
+        if not token:
             return await self._render_template("state_auth.html", {
                 "lang": "en", "title": "State Login",
                 "flash": {"level": "error", "text": "Session creation failed"},
             })
-        response = web.HTTPFound("/api/state/dashboard")
+        response = web.HTTPFound("/state-portal")
         response.set_cookie(
             Config.STATE_SESSION_COOKIE_NAME, token,
             max_age=Config.SESSION_TTL_SECONDS, httponly=True,
             secure=self._is_secure_cookie_enabled(), samesite="Lax",
         )
+        return response
+
+    async def form_state_logout(self, request: web.Request) -> web.StreamResponse:
+        token = request.cookies.get(Config.STATE_SESSION_COOKIE_NAME)
+        if token:
+            db.delete("state_sessions", {"session_token": token})
+        response = web.HTTPFound("/")
+        response.del_cookie(Config.STATE_SESSION_COOKIE_NAME)
         return response
 
     async def set_language(self, request: web.Request) -> web.StreamResponse:
@@ -1028,9 +1086,18 @@ class TNTPortalApp:
         redir = await self._require_auth_page(request)
         if redir:
             return redir
-        states = db.fetchall("SELECT * FROM states WHERE is_active = 1") or []
+        dashboard = GamePortalService.member_dashboard_data(request["user_id"])
         ctx = self._base_ctx(request)
-        ctx.update({"title": "Operations Lists", "alliances": states, "state_number": None})
+        ctx.update(
+            {
+                "title": "بوابة الأعضاء",
+                "dashboard": dashboard,
+                "profile": dashboard["profile"],
+                "map_data": dashboard["map_data"],
+                "knowledge_highlights": dashboard["knowledge_highlights"],
+                "calculator_catalog": dashboard["calculator_catalog"],
+            }
+        )
         return await self._render_template("portal_home.html", ctx)
 
     async def dashboard_page(self, request: web.Request) -> web.StreamResponse:
@@ -1045,7 +1112,15 @@ class TNTPortalApp:
         redir = await self._require_auth_page(request)
         if redir:
             return redir
-        records = db.fetchall("SELECT * FROM users ORDER BY created_at DESC") or []
+        records = db.fetchall(
+            """
+            SELECT id, email, username, game_name, state, player_power, specialization, alliance_role,
+                   is_banned, role, created_at
+            FROM users
+            WHERE role IN ('member', 'admin', 'state_admin')
+            ORDER BY player_power DESC, created_at DESC
+            """
+        ) or []
         ctx = self._base_ctx(request)
         ctx.update({"title": "Members", "records": records})
         return await self._render_template("members.html", ctx)
@@ -1075,10 +1150,42 @@ class TNTPortalApp:
         cu = request.get("current_user")
         if not (cu and getattr(cu, "role", "") == "super_owner"):
             return web.HTTPFound("/portal")
-        users = db.fetchall("SELECT id, username, email, role, is_admin, created_at FROM users ORDER BY created_at DESC") or []
+        owner_data = GamePortalService.owner_dashboard_data()
         ctx = self._base_ctx(request)
-        ctx.update({"title": "Owner Panel", "users": users})
+        ctx.update({"title": "Owner Panel", **owner_data})
         return await self._render_template("owner_panel.html", ctx)
+
+    async def state_portal_page(self, request: web.Request) -> web.StreamResponse:
+        if not request.get("state_authenticated"):
+            return web.HTTPFound("/")
+        state_row = db.fetchone(
+            "SELECT id, state_name, state_number, description, contact_email, contact_discord FROM states WHERE id = ?",
+            (request["state_id"],),
+        )
+        if not state_row:
+            return web.HTTPFound("/")
+        members = db.fetchall(
+            "SELECT id, member_name, member_uid, alliance, rank, power, created_at FROM member_records WHERE state_id = ? ORDER BY created_at DESC",
+            (request["state_id"],),
+        )
+        transfers = db.fetchall(
+            "SELECT id, member_name, member_uid, power, furnace, current_state, future_alliance, created_at FROM transfer_records WHERE state_id = ? ORDER BY created_at DESC",
+            (request["state_id"],),
+        )
+        return await self._render_template(
+            "state_portal.html",
+            {
+                "lang": self._lang(request),
+                "title": "State Portal",
+                "sa": state_row,
+                "members": members,
+                "transfers": transfers,
+                "alliances": [state_row["state_name"], state_row["state_number"]],
+                "fields": [],
+                "request_path": request.path,
+                "current_user": request.get("current_user"),
+            },
+        )
 
     async def transfers_page(self, request: web.Request) -> web.StreamResponse:
         redir = await self._require_auth_page(request)
@@ -1281,6 +1388,164 @@ class TNTPortalApp:
             "flash": {"level": "success" if ok else "error", "text": msg},
         })
 
+    async def calculate_api(self, request: web.Request) -> web.Response:
+        if not request.get("authenticated"):
+            return web.json_response({"error": "غير موثق"}, status=401)
+        try:
+            payload = await request.json()
+            calculator_type = request.match_info["calculator_type"]
+            if calculator_type == "troops":
+                result = GamePortalService.calculate_training(
+                    payload.get("troop_type", "infantry"),
+                    int(payload.get("tier", 1)),
+                    int(payload.get("count", 1)),
+                    float(payload.get("speed_bonus_percent", 0)),
+                )
+            elif calculator_type in {"building", "research", "academy"}:
+                result = GamePortalService.calculate_upgrade(
+                    calculator_type,
+                    payload.get("target_key", "hq" if calculator_type == "building" else "academy"),
+                    int(payload.get("current_level", 0)),
+                    int(payload.get("target_level", 1)),
+                    float(payload.get("speed_bonus_percent", 0)),
+                )
+            else:
+                return web.json_response({"error": "نوع الحاسبة غير مدعوم"}, status=400)
+        except ValueError as exc:
+            return web.json_response({"error": str(exc)}, status=400)
+        except Exception:
+            return web.json_response({"error": "بيانات الحاسبة غير صالحة"}, status=400)
+        return web.json_response({"success": True, "result": result})
+
+    async def map_api(self, request: web.Request) -> web.Response:
+        if not request.get("authenticated"):
+            return web.json_response({"error": "غير موثق"}, status=401)
+        user_row = db.fetchone("SELECT state FROM users WHERE id = ?", (request["user_id"],)) or {}
+        return web.json_response({"success": True, "map": GamePortalService.compute_bear_map(user_row.get("state"))})
+
+    async def ai_chat_api(self, request: web.Request) -> web.Response:
+        if not request.get("authenticated"):
+            return web.json_response({"error": "غير موثق"}, status=401)
+        try:
+            payload = await request.json()
+            question = payload.get("question", "").strip()
+        except Exception:
+            return web.json_response({"error": "بيانات JSON غير صالحة"}, status=400)
+        if not question:
+            return web.json_response({"error": "السؤال مطلوب"}, status=400)
+        answer = GamePortalService.ai_answer(request["user_id"], question)
+        return web.json_response({"success": True, **answer})
+
+    async def owner_create_state(self, request: web.Request) -> web.StreamResponse:
+        owner = request.get("current_user")
+        if not (owner and owner.is_owner):
+            return web.HTTPFound("/portal")
+        data = await request.post()
+        success, message, _ = GamePortalService.create_state_account(dict(data), request["user_id"])
+        response = web.HTTPFound("/owner")
+        response.set_cookie("owner_flash", json.dumps({"level": "success" if success else "error", "text": message}, ensure_ascii=False), max_age=10)
+        return response
+
+    async def owner_update_state(self, request: web.Request) -> web.StreamResponse:
+        owner = request.get("current_user")
+        if not (owner and owner.is_owner):
+            return web.HTTPFound("/portal")
+        try:
+            state_id = int(request.match_info["state_id"])
+        except ValueError:
+            return web.HTTPFound("/owner")
+        data = await request.post()
+        GamePortalService.update_state_account(state_id, dict(data))
+        return web.HTTPFound("/owner")
+
+    async def owner_toggle_state(self, request: web.Request) -> web.StreamResponse:
+        owner = request.get("current_user")
+        if not (owner and owner.is_owner):
+            return web.HTTPFound("/portal")
+        try:
+            state_id = int(request.match_info["state_id"])
+        except ValueError:
+            return web.HTTPFound("/owner")
+        data = await request.post()
+        GamePortalService.toggle_state(state_id, data.get("is_active", "1") == "1")
+        return web.HTTPFound("/owner")
+
+    async def owner_update_member(self, request: web.Request) -> web.StreamResponse:
+        owner = request.get("current_user")
+        if not (owner and owner.is_owner):
+            return web.HTTPFound("/portal")
+        try:
+            user_id = int(request.match_info["user_id"])
+        except ValueError:
+            return web.HTTPFound("/owner")
+        data = await request.post()
+        GamePortalService.update_member_account(user_id, dict(data))
+        return web.HTTPFound("/owner")
+
+    async def owner_toggle_member_ban(self, request: web.Request) -> web.StreamResponse:
+        owner = request.get("current_user")
+        if not (owner and owner.is_owner):
+            return web.HTTPFound("/portal")
+        try:
+            user_id = int(request.match_info["user_id"])
+        except ValueError:
+            return web.HTTPFound("/owner")
+        data = await request.post()
+        GamePortalService.set_member_ban(user_id, data.get("is_banned", "1") == "1")
+        return web.HTTPFound("/owner")
+
+    async def owner_map_settings(self, request: web.Request) -> web.StreamResponse:
+        owner = request.get("current_user")
+        if not (owner and owner.is_owner):
+            return web.HTTPFound("/portal")
+        data = await request.post()
+        custom_layout_raw = data.get("custom_layout", "").strip()
+        custom_layout = []
+        if custom_layout_raw:
+            try:
+                custom_layout = json.loads(custom_layout_raw)
+            except json.JSONDecodeError:
+                custom_layout = []
+        GamePortalService.set_map_settings(
+            data.get("shape", "circle"),
+            int(data.get("layers", 3)),
+            int(data.get("spacing", 130)),
+            data.get("sort_by", "power"),
+            custom_layout,
+        )
+        return web.HTTPFound("/owner")
+
+    async def owner_calculator_settings(self, request: web.Request) -> web.StreamResponse:
+        owner = request.get("current_user")
+        if not (owner and owner.is_owner):
+            return web.HTTPFound("/portal")
+        data = await request.post()
+        try:
+            multiplier = float(data.get("multiplier", 1))
+        except ValueError:
+            multiplier = 1.0
+        GamePortalService.upsert_calculator_modifier(
+            data.get("calculator_type", "building"),
+            data.get("target_key", "hq"),
+            data.get("resource_key", "food"),
+            multiplier,
+        )
+        return web.HTTPFound("/owner")
+
+    async def owner_save_knowledge(self, request: web.Request) -> web.StreamResponse:
+        owner = request.get("current_user")
+        if not (owner and owner.is_owner):
+            return web.HTTPFound("/portal")
+        data = await request.post()
+        GamePortalService.upsert_knowledge_entry(
+            data.get("category", "events").strip(),
+            data.get("entry_name", "").strip(),
+            data.get("tags", "").split(","),
+            data.get("summary", "").strip(),
+            data.get("best_use", "").strip(),
+        )
+        return web.HTTPFound("/owner")
+
     def _create_user_session(self, user_id: int, request: web.Request) -> str | None:
         from utils.security import SecurityManager
 
@@ -1290,6 +1555,25 @@ class TNTPortalApp:
             "sessions",
             {
                 "user_id": user_id,
+                "session_token": session_token,
+                "ip_address": request.remote,
+                "user_agent": request.headers.get("User-Agent", ""),
+                "expires_at": expires_at,
+            },
+        )
+        if not inserted_id:
+            return None
+        return session_token
+
+    def _create_state_session(self, state_id: int, request: web.Request) -> str | None:
+        from utils.security import SecurityManager
+
+        session_token = SecurityManager.generate_token()
+        expires_at = (datetime.now() + timedelta(seconds=Config.SESSION_TTL_SECONDS)).isoformat()
+        inserted_id = db.insert(
+            "state_sessions",
+            {
+                "state_id": state_id,
                 "session_token": session_token,
                 "ip_address": request.remote,
                 "user_agent": request.headers.get("User-Agent", ""),
@@ -1331,6 +1615,8 @@ def create_super_owner() -> None:
 async def init_app() -> web.Application:
     logger.info("Initializing database tables")
     db.init_tables()
+    logger.info("Bootstrapping gameplay data")
+    GamePortalService.bootstrap()
     logger.info("Initializing default permissions")
     PermissionManager.init_default_permissions()
     logger.info("Ensuring owner account exists")

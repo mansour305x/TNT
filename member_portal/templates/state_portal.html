@@ -4,10 +4,12 @@
 
   <div class="dash-header">
     <div>
-      <h1 class="dash-title">🏛️ State Portal — {{ sa.state_name }}</h1>
-      <p class="dash-subtitle">Manage your state's members and transfers</p>
+      <h1 class="dash-title">🏛️ {{ 'State Portal' if lang == 'en' else 'بوابة الولاية' }} — {{ sa.state_name }}</h1>
+      <p class="dash-subtitle">{{ 'Manage your state members and transfer records' if lang == 'en' else 'إدارة أعضاء الولاية وسجلات النقل والتحكم الأساسي' }}</p>
     </div>
-    <a href="/state-logout" class="btn btn-ghost" style="align-self:start;">Sign Out</a>
+    <form method="post" action="/state-logout" style="align-self:start;">
+      <button class="btn btn-ghost" type="submit">{{ 'Sign Out' if lang == 'en' else 'تسجيل الخروج' }}</button>
+    </form>
   </div>
 
   <!-- Change Password -->

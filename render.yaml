@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: tnt-portal
+    name: tnt-2
     runtime: python
     plan: free
     rootDir: member_portal
@@ -27,6 +27,12 @@ services:
       - key: OWNER_PASSWORD
         value: Aa@123456
 
+      # ── AI ───────────────────────────────────────────────
+      - key: AI_API_KEY
+        sync: false
+      - key: AI_MODEL_NAME
+        value: gpt-4.1-mini
+
       # ── Google OAuth2 ─────────────────────────────────────
       # Set these in the Render dashboard manually:
       - key: GOOGLE_CLIENT_ID
@@ -34,7 +40,7 @@ services:
       - key: GOOGLE_CLIENT_SECRET
         value: ""
       - key: GOOGLE_REDIRECT_URI
-        value: https://tnt-portal.onrender.com/oauth/google/callback
+        value: https://tnt-2.onrender.com/auth/google/callback
 
       # ── Discord OAuth2 ────────────────────────────────────
       - key: DISCORD_CLIENT_ID
@@ -42,7 +48,7 @@ services:
       - key: DISCORD_CLIENT_SECRET
         value: ""
       - key: DISCORD_REDIRECT_URI
-        value: https://tnt-portal.onrender.com/oauth/discord/callback
+        value: https://tnt-2.onrender.com/auth/discord/callback
 
       # ── SMTP / Email ──────────────────────────────────────
       - key: SMTP_SERVER
